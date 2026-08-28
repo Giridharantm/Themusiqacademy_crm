@@ -11,17 +11,11 @@ npm run dev
 
 Open http://localhost:3000 — you'll be redirected to `/login`.
 
-The database (`prisma/dev.db`) is already seeded with sample data. To reset and reseed:
-
-```bash
-npx prisma migrate reset
-```
-
-(this re-runs migrations and the seed script automatically — it will ask for confirmation since it wipes local data)
+The database (`prisma/dev.db`) currently holds the academy's real migrated data — 345 students, 310 leads, batches, attendance and subscription history imported from their previous CRM (see "Data note" below), not the original demo seed. `npx prisma migrate reset` will wipe that and restore `prisma/seed.ts`'s small synthetic dataset instead — **don't run it against this database without a backup**, since it isn't reversible.
 
 ## Demo logins
 
-All demo accounts use the password `password123`.
+The admin and teacher accounts below are real logins (`password123`), unaffected by the legacy data import. There's currently no Parent-role login — the imported data had no guardian/portal accounts to carry over — so the parent portal can't be demoed until one is created for a real student.
 
 | Role    | Email                                | What they can do |
 |---------|----------------------------------------|-------------------|
@@ -30,9 +24,10 @@ All demo accounts use the password `password123`.
 | Teacher | teacher.anjali@musiqacademy.test       | Keyboard & Western Vocals |
 | Teacher | teacher.lakshmi@musiqacademy.test      | Carnatic & Hindustani Vocals |
 | Teacher | teacher.arun@musiqacademy.test         | Drums |
-| Parent  | parent.sharma@musiqacademy.test        | View their child's attendance, subscription dates, fees, homework and feedback |
 
-The seeded student (Arjun Sharma, `STUD-00001`) starts with a 3-month/24-class Guitar subscription at 22/24 used, 2 remaining — a ready-made "Renew soon" example. Reseeding always resets to that same state.
+## Data note
+
+The current dataset was migrated from the academy's previous CRM (three CSV/XLSX exports: enquiries, student details, attendance, and a separate real batch roster). Piano was merged into Keyboard (the old system tracked them as distinct labels for the same instrument). Legacy "classes completed" numbers from before this app existed are preserved via `Subscription.classesUsedAtMigration` — see `src/lib/subscription.ts` — rather than being lost when attendance tracking switched to this app's per-class records. A handful of individual data anomalies (duplicate person records under separate student IDs, one student attending past their plan while awaiting renewal) were reviewed and fixed case-by-case rather than auto-corrected in bulk — see git history for specifics if similar cases come up again.
 
 ## Student IDs
 
@@ -40,7 +35,7 @@ Every student gets a unique, sequential ID (`STUD-00001`, `STUD-00002`, ...) ass
 
 ## Courses offered
 
-Guitar, Keyboard, Drums, Western Vocals, Carnatic Vocals, Hindustani Vocals, Violin. Manage these (name, fee, billing cycle) from `/admin/courses` — fees are seeded at Rs. 2,500/month as a placeholder, edit per course as needed.
+Guitar, Keyboard, Drums, Western Vocals, Carnatic Vocals, Hindustani Vocals, Violin. Manage these (name, description, session duration) from `/admin/courses` — there's no per-course fee, since billing is a fixed price list by plan duration across every instrument (see "Billing" below). Deleting a course is blocked with a specific count of what's in the way (batches, subscriptions, attendance records, interested leads) if it still has any — `deleteCourse()` in `src/lib/actions/course-actions.ts`; the same guard exists for deleting a batch with enrollments (`deleteBatch()` in `src/lib/actions/batch-actions.ts`).
 
 ## Batches
 
@@ -127,6 +122,7 @@ Every admin list page (Leads, Students, Attendance, Courses, Batches, Teachers, 
 ## Tech notes
 
 - **Database**: SQLite via Prisma (`prisma/schema.prisma`). Swap the `DATABASE_URL` in `.env` and provider in the schema to move to Postgres/MySQL later — the app code doesn't need to change.
+- **UI theme**: "Vinyl Label" — a retro record-sleeve palette (deep teal, coral, sunshine yellow on warm cream) defined as CSS custom properties in `src/app/globals.css`'s `@theme` block, including a retint of Tailwind's own `indigo`/`slate` scales so most of the app picked it up automatically. Shared primitives (`Card`, `Button`, `Badge`, `StatCard`, `Input`, etc.) live in `src/components/ui.tsx` — use those and the `vinyl-*`/retinted-`slate` color tokens for anything new rather than hardcoding colors.
 - **Auth**: NextAuth v5 (credentials + JWT), role stored on the `User` model (`ADMIN` / `TEACHER` / `PARENT`). Route access is enforced in `src/middleware.ts`.
 - **New teacher/guardian accounts**: created with a temporary password (`password123` by default) — have them sign in and note it, there's no password reset flow yet.
 - This is set up for local use only. To host it online later, swap SQLite for a hosted Postgres database and deploy to a host like Vercel or Railway (set `DATABASE_URL` and `AUTH_SECRET` there).
