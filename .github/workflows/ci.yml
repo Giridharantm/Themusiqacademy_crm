@@ -26,12 +26,13 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Typecheck
-        run: npx tsc --noEmit
-
-      - name: Test
-        run: npm test
-
+      # Build before Typecheck: Next.js generates ambient types (route params,
+      # LayoutProps, etc.) under .next/types on first build/dev run, and
+      # src/app/layout.tsx's `LayoutProps<"/">` depends on them — a bare
+      # `tsc --noEmit` on a fresh checkout fails with "Cannot find name
+      # 'LayoutProps'" before that exists. `next build` both generates those
+      # types and does its own internal type-check, so it doubles as the
+      # first (and stricter) type-check pass.
       - name: Build
         env:
           # Dummy values — nothing in the build touches a live database or
@@ -39,3 +40,9 @@ jobs:
           DATABASE_URL: "postgresql://user:password@localhost:5432/db"
           AUTH_SECRET: "ci-build-placeholder-secret"
         run: npm run build
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npm test
