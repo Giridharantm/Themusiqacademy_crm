@@ -1,0 +1,342 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  PARENT
+}
+
+enum LeadSource {
+  CALL
+  WALK_IN
+  REFERRAL
+  ONLINE
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  TRIAL_SCHEDULED
+  CONVERTED
+  LOST
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+enum InvoiceStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  UPI
+  BANK_TRANSFER
+  OTHER
+}
+
+enum SubscriptionPlan {
+  ONE_MONTH
+  THREE_MONTHS
+  SIX_MONTHS
+  ONE_YEAR
+  CUSTOM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  passwordHash  String
+  role          Role
+  phone         String?
+  status        String   @default("ACTIVE") // ACTIVE / INACTIVE — deactivating (not deleting) preserves their history on batches/homework/feedback
+  createdAt     DateTime @default(now())
+
+  // Teacher relations
+  batchesTaught Batch[]      @relation("TeacherBatches")
+  homeworkGiven Homework[]   @relation("TeacherHomework")
+  feedbackGiven Feedback[]   @relation("TeacherFeedback")
+  attendanceMarked Attendance[] @relation("MarkedByTeacher")
+
+  // Admin/staff relations
+  leadsAssigned  Lead[]       @relation("AssignedStaff")
+  followUpsMade  FollowUp[]   @relation("FollowUpCreatedBy")
+  bonusGrantsGiven BonusGrant[] @relation("BonusGrantedBy")
+
+  // Parent relations
+  studentLinks StudentGuardian[]
+}
+
+model Lead {
+  id                String     @id @default(cuid())
+  name              String
+  phone             String
+  email             String?
+  source            LeadSource
+  status            LeadStatus @default(NEW)
+  interestedCourseId String?
+  interestedCourse  Course?    @relation(fields: [interestedCourseId], references: [id])
+  notes             String?
+  assignedToId      String?
+  assignedTo        User?      @relation("AssignedStaff", fields: [assignedToId], references: [id])
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  followUps FollowUp[]
+  student   Student?
+}
+
+model FollowUp {
+  id              String   @id @default(cuid())
+  leadId          String
+  lead            Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  note            String
+  followUpDate    DateTime
+  done            Boolean  @default(false)
+  createdById     String?
+  createdBy       User?    @relation("FollowUpCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime @default(now())
+}
+
+model Course {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  durationMinutes Int      @default(60)
+  createdAt       DateTime @default(now())
+
+  batches       Batch[]
+  leads         Lead[]
+  subscriptions Subscription[]
+  attendance    Attendance[]
+}
+
+model Batch {
+  id          String   @id @default(cuid())
+  name        String
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id])
+  teacherId   String?
+  teacher     User?    @relation("TeacherBatches", fields: [teacherId], references: [id])
+  dayOfWeek   String   // e.g. "TUE" — a batch is one instrument + one day + one time slot
+  startTime   String   // "17:00"
+  endTime     String   // "18:00"
+  room        String?
+  createdAt   DateTime @default(now())
+
+  enrollments Enrollment[]
+  homework    Homework[]
+}
+
+model Student {
+  id         String   @id @default(cuid())
+  studentCode String  @unique // e.g. "STUD-00289" — phone numbers can be shared across a family, this can't
+  name       String
+  dob        DateTime?
+  gender     String?
+  phone      String?
+  email      String?
+  address    String?
+  joinDate   DateTime @default(now())
+  status     String   @default("ACTIVE") // ACTIVE / INACTIVE
+  leadId     String?  @unique
+  lead       Lead?    @relation(fields: [leadId], references: [id])
+  createdAt  DateTime @default(now())
+
+  guardians     StudentGuardian[]
+  enrollments   Enrollment[]
+  feedback      Feedback[]
+  invoices      Invoice[]
+  subscriptions Subscription[]
+  attendance    Attendance[]
+}
+
+model StudentGuardian {
+  id        String @id @default(cuid())
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relation  String  @default("Parent")
+
+  @@unique([studentId, userId])
+}
+
+model Enrollment {
+  id        String            @id @default(cuid())
+  studentId String
+  student   Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batchId   String
+  batch     Batch             @relation(fields: [batchId], references: [id])
+  startDate DateTime          @default(now())
+  endDate   DateTime?
+  status    EnrollmentStatus  @default(ACTIVE)
+  createdAt DateTime          @default(now())
+
+  @@unique([studentId, batchId])
+}
+
+// A purchased class package for one student's instrument (Course) — not tied
+// to a single batch, since a student can attend that instrument across
+// several single-day batches (e.g. Drums on Tuesday AND Thursday) sharing one
+// pool of classes. Renewing closes out the current one (status -> EXPIRED,
+// classesUsedAtClose frozen) and starts a fresh one, so history and
+// remaining-classes math stay simple without needing to touch past
+// Attendance rows.
+model Subscription {
+  id                 String             @id @default(cuid())
+  studentId          String
+  student            Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId           String
+  course             Course             @relation(fields: [courseId], references: [id])
+  plan               SubscriptionPlan
+  baseClasses        Int
+  carryForwardClasses Int               @default(0)
+  startDate          DateTime           @default(now())
+  endDate            DateTime?
+  status             SubscriptionStatus @default(ACTIVE)
+  classesUsedAtClose Int?
+  // A fixed offset added on top of the live Attendance count for ACTIVE
+  // subscriptions — covers classes actually attended before this app existed
+  // (the legacy CRM tallied a running total without a per-class Attendance
+  // record for all of it), so migrated students don't appear to have fewer
+  // classes used than they really do. Stays constant; new Attendance rows
+  // marked going forward add on top of it via the live count, not this field.
+  classesUsedAtMigration Int             @default(0)
+  invoiceId          String?            @unique
+  invoice            Invoice?           @relation(fields: [invoiceId], references: [id])
+  createdAt          DateTime           @default(now())
+
+  bonusGrants BonusGrant[]
+}
+
+// A grant of extra (promotional) classes on top of a subscription's base plan.
+model BonusGrant {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  classes        Int
+  reason         String?
+  grantedAt      DateTime     @default(now())
+  grantedById    String?
+  grantedBy      User?        @relation("BonusGrantedBy", fields: [grantedById], references: [id])
+}
+
+// Attendance is tied directly to a student + instrument (Course) + date, not
+// to any specific batch/time-slot or standing Enrollment — marking only ever
+// needs to answer "did this student attend this instrument on this date",
+// regardless of which of the course's batches they're normally in. A student
+// can be marked present for a one-off reschedule/comp class covering a
+// different day than their usual batch, and it still counts toward their
+// subscription for that instrument (subscriptions already pool by course).
+model Attendance {
+  id         String            @id @default(cuid())
+  studentId  String
+  student    Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId   String
+  course     Course            @relation(fields: [courseId], references: [id])
+  date       DateTime
+  status     AttendanceStatus
+  note       String?
+  markedById String?
+  markedBy   User?             @relation("MarkedByTeacher", fields: [markedById], references: [id])
+  createdAt  DateTime          @default(now())
+
+  @@unique([studentId, courseId, date])
+}
+
+model Homework {
+  id           String   @id @default(cuid())
+  batchId      String
+  batch        Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  teacherId    String?
+  teacher      User?    @relation("TeacherHomework", fields: [teacherId], references: [id])
+  title        String
+  description  String?
+  assignedDate DateTime @default(now())
+  dueDate      DateTime?
+  createdAt    DateTime @default(now())
+}
+
+model Feedback {
+  id         String   @id @default(cuid())
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacherId  String?
+  teacher    User?    @relation("TeacherFeedback", fields: [teacherId], references: [id])
+  note       String
+  date       DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  invoiceNumber  String        @unique
+  studentId      String
+  student        Student       @relation(fields: [studentId], references: [id])
+  issueDate      DateTime      @default(now())
+  dueDate        DateTime
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  discount       Float         @default(0)
+  // GST breakdown of `total` (post-discount, GST-inclusive), frozen at
+  // creation time — 18% combined, split evenly as CGST + SGST.
+  amountWithoutGst Float       @default(0)
+  cgstAmount     Float         @default(0)
+  sgstAmount     Float         @default(0)
+  total          Float
+  status         InvoiceStatus @default(PENDING)
+  notes          String?
+  createdAt      DateTime      @default(now())
+
+  items        InvoiceItem[]
+  payments     Payment[]
+  subscription Subscription?
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  amount      Float
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  invoiceId String
+  invoice   Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount    Float
+  method    PaymentMethod @default(CASH)
+  paidDate  DateTime      @default(now())
+  note      String?
+}

@@ -1,0 +1,133 @@
+# The Musiq Academy CRM
+
+Leads, students, attendance, billing and role-based portals for a music academy — built with Next.js, Prisma and SQLite.
+
+## Running locally
+
+```bash
+npm install
+npm run dev
+```
+
+Open http://localhost:3000 — you'll be redirected to `/login`.
+
+The database (`prisma/dev.db`) is already seeded with sample data. To reset and reseed:
+
+```bash
+npx prisma migrate reset
+```
+
+(this re-runs migrations and the seed script automatically — it will ask for confirmation since it wipes local data)
+
+## Demo logins
+
+All demo accounts use the password `password123`.
+
+| Role    | Email                                | What they can do |
+|---------|----------------------------------------|-------------------|
+| Admin   | admin@musiqacademy.test                | Leads, students, attendance, courses, batches, teachers, billing |
+| Teacher | teacher.ravi@musiqacademy.test         | Guitar & Violin — mark attendance, assign homework, give feedback |
+| Teacher | teacher.anjali@musiqacademy.test       | Keyboard & Western Vocals |
+| Teacher | teacher.lakshmi@musiqacademy.test      | Carnatic & Hindustani Vocals |
+| Teacher | teacher.arun@musiqacademy.test         | Drums |
+| Parent  | parent.sharma@musiqacademy.test        | View their child's attendance, subscription dates, fees, homework and feedback |
+
+The seeded student (Arjun Sharma, `STUD-00001`) starts with a 3-month/24-class Guitar subscription at 22/24 used, 2 remaining — a ready-made "Renew soon" example. Reseeding always resets to that same state.
+
+## Student IDs
+
+Every student gets a unique, sequential ID (`STUD-00001`, `STUD-00002`, ...) assigned on creation — from `/admin/students` directly or via lead conversion. This exists because phone numbers aren't reliable identifiers here: a family can have several students (siblings, or a parent and child both enrolled) sharing one number. Search boxes on the students, attendance, and billing pages all match against the student ID as well as name/phone/email.
+
+## Courses offered
+
+Guitar, Keyboard, Drums, Western Vocals, Carnatic Vocals, Hindustani Vocals, Violin. Manage these (name, fee, billing cycle) from `/admin/courses` — fees are seeded at Rs. 2,500/month as a placeholder, edit per course as needed.
+
+## Batches
+
+A batch is exactly **one instrument + one day + one 1-hour time slot** — e.g. "Drums, Tuesday, 3:00 PM - 4:00 PM" is one batch. There's no such thing as a batch spanning multiple days: a student who wants Guitar four times a week enrolls in four separate Guitar batches (Tue/Wed/Thu/Fri), each its own entity. The batch name is auto-generated from instrument + day + time, so there's nothing to type when creating one.
+
+The "New batch" form (`/admin/batches`) only offers valid day/time combinations for this schedule:
+
+- **Monday** — holiday, no classes
+- **Tuesday–Friday** — 3:00 PM to 9:00 PM, hourly slots (last batch starts 8:00 PM)
+- **Saturday** — 2:00 PM to 8:00 PM, hourly slots
+- **Sunday** — 11:00 AM to 5:00 PM, hourly slots
+
+Enforced both in the UI (`src/components/batch-schedule-fields.tsx`) and server-side (`src/lib/actions/batch-actions.ts`), driven by `src/lib/schedule.ts` — change the operating hours there if they ever change. The batches list is sorted by instrument, then day (Tue..Sun), then time (`sortBatches()` in the same file), so it reads like a weekly timetable.
+
+Each batch on `/admin/batches` has an **Edit** disclosure to change its teacher, day/time, or room after creation (`updateBatch()`) — the same day/time picker as "New batch", pre-filled with its current values. Instrument isn't editable, since every enrollment and subscription pooled against that batch is keyed on it — moving to a different instrument goes through delete + create a fresh batch instead, the same restriction as editing a student's enrollment.
+
+## Dashboard
+
+`/admin` (and `/admin` alone) is the daily operating snapshot, not just a link hub:
+
+- **Stat row 1**: Open leads (with a New/Contacted/Trial breakdown as the hint), Active students, Renewals this month, Classes today — each links straight into the matching filtered view (see "Finding who needs a renewal" and the batch-filter sections above).
+- **Stat row 2**: Revenue this month (payments actually collected, not invoiced) and Outstanding dues (unpaid balance across Pending/Partial/Overdue invoices) — the same figures shown on `/admin/billing`, surfaced here too since they're the first thing to check most days.
+- **Classes today**: grouped by **instrument**, not by individual batch/time-slot — matching how marking actually works now (one attendance session per instrument per day, not per time-slot). Each row shows the teacher(s), how many batches and students are on today's roster for that instrument, and whether attendance has been marked yet (Not marked yet / partially / Marked, colored red/yellow/green) with a **Mark** link straight into `/admin/attendance` pre-loaded for that instrument and today's date.
+
+## How the workflow fits together
+
+1. **Leads** (`/admin/leads`) — log an enquiry from a call or walk-in, track follow-ups, update status. Searchable by name/phone/email. "Edit details" lets you correct any captured field later.
+2. **Convert to student** — from a lead's page, "Convert to student" opens a review form (name, phone, email, instrument, DOB, gender, address — all pre-filled from the lead but editable) with **Confirm & convert** / **Cancel** buttons. Nothing is created until you confirm; any corrections made here are saved back onto the lead too. The new student gets a unique student ID (`STUD-00001`, ...) — phone numbers get shared across a family, so that's what actually identifies a student.
+3. **Enroll & guardians** — on the student's page, "Add a batch" walks through **Instrument → Day → Time** (cascading, only showing combinations that actually exist) and "+ Add this batch" queues it into a list — since a subscription's plan is usually spread across a couple of day-slots a week (e.g. Guitar Tue + Thu), you can queue up every batch the student needs before submitting once, rather than a submit-reload-repeat loop per batch (`src/components/enroll-batch-fields.tsx`). For each distinct instrument among the queued batches that doesn't already have an active subscription, the same form shows that instrument's own class-package fields (plan/carry-forward/bonus) — enrolling always creates or reuses a subscription per instrument in the same step, never leaving a batch enrollment without a package; queuing two batches of the same instrument only asks for one package, since they share its pool. Each already-enrolled batch has its own **Edit** (move it to a different day/time of the same instrument) and **Delete** (remove the enrollment outright — doesn't touch attendance or subscription history, which key off student+instrument, not the enrollment) alongside Pause/Complete/Resume. Link a guardian/parent/self account from the same page (auto-creates their parent-portal login) — students range from young children to adults, so use relation "Self" for adult students who manage their own account rather than a parent's.
+4. **Subscriptions** — see "Class packages & renewals" below.
+5. **Attendance** — bulk, by instrument + date, since group classes run several students at once and marking never needs to know which specific batch/time-slot (see "Attendance" below). Admins mark any instrument from `/admin/attendance`; teachers do the same for instruments they teach from `/teacher/attendance`. Both pages also let you search a student for their combined attendance history.
+6. **Billing** (`/admin/billing`) — raise invoices per student, record payments; status updates automatically (Pending → Partial → Paid). Line item amounts are a fixed price list across every instrument, not free text — 1 Month = Rs. 4,800, 3 Months = Rs. 13,680, 6 Months = Rs. 25,920, 1 Year = Rs. 40,320 (`PLAN_INVOICE_AMOUNTS` in `src/lib/subscription.ts`) — and discounts are picked from Rs. 500 steps up to Rs. 10,000, or "No discount" (`DISCOUNT_STEPS`). Both are re-validated server-side in `createInvoice()` so a tampered submission can't sneak in an arbitrary amount. Every invoice's post-discount total is treated as **GST-inclusive at 18%** — `splitGst()` in `src/lib/billing.ts` breaks it into `amountWithoutGst` + 9% CGST + 9% SGST, computed once and stored on the invoice at creation (not recalculated from `total` on every render), so a future GST-rate change can't rewrite a past invoice's tax breakdown. Shown as its own "Fee details" section on the invoice page. A **Print invoice** button (`window.print()`) is available there any time — before or after payment — and the page hides the app's nav/sidebar and admin-only actions (record payment, cancel) when printing, so what comes out is just the invoice itself.
+7. **Teachers** log in separately, see only their own batches and students, mark attendance, assign homework, and leave feedback. Manage teacher accounts from `/admin/teachers` — see "Managing teachers" below.
+8. **Parents** log in and see their children's subscription progress, attendance history, pending/paid invoices, homework and teacher feedback — read only.
+
+## Managing teachers
+
+`/admin/teachers/[id]` (click through from the teachers list) is where you edit, deactivate, reassign, or delete a teacher:
+
+- **Edit** — name/email/phone.
+- **Reassign batches** — per-batch dropdown, or "Reassign ALL batches to" to move a full schedule to another teacher in one click. Useful before deactivating someone who's covering several classes.
+- **Deactivate / Reactivate** — the standard way to "remove" a teacher who has history (batches, homework, feedback, or attendance they've marked). Deactivating disables their login (checked in `src/lib/auth.ts`'s `authorize()`) without touching any of that history or its attribution. Deactivated teachers also drop out of the "Teacher" dropdown when creating new batches (`/admin/batches` only offers `status: "ACTIVE"` teachers), but stay assigned to whatever they already had — reassign those explicitly if you want them cleared.
+- **Delete** — only offered when the account has zero batches and zero history (checked in `deleteTeacher()` in `src/lib/actions/user-actions.ts`); otherwise it's blocked with an explanation to reassign + deactivate instead. This is for accounts created by mistake, not real removal of a teacher who's taught.
+
+## Class packages & renewals
+
+Subscriptions are class-count packages, not calendar periods — this is what "renewal" actually means here. A subscription is **pooled per (student, instrument)** — not per batch — because a student can attend one instrument across several day-slots (e.g. Guitar on Tuesday AND Thursday), or even a one-off comp/reschedule class in a batch they don't normally attend, all drawing from a single package. Matches "8 classes/month" working out to roughly 2 classes/week regardless of which specific days or batches those fall on. Each (student, course) pair can have one active `Subscription` at a time; `attendanceForSubscription()` in `src/lib/subscription.ts` pools every `Attendance` row for that student across any batch of that course.
+
+- **Plans**: 1 Month = 8 classes, 3 Months = 24, 6 Months = 48, 1 Year = 96 (defined in `src/lib/subscription.ts`), or a Custom class count.
+- **Expiry date**: pre-filled from the start date plus a fixed day count per plan — 40 days for 1 Month, 120 for 3 Months, 240 for 6 Months, 480 for 1 Year (`PLAN_DAYS` in `src/lib/subscription.ts`; that's 40 days per plan-month, a grace window beyond the nominal duration for holidays/reschedules, not calendar-month arithmetic). Shown as an editable "Expiry date" field — picking a different plan recomputes it, but it can be overridden before submitting. Custom plans have no formula and start blank.
+- **Bonus classes**: promotional extra classes added on top of the base plan at any time, each with its own reason/note (`BonusGrant`), so you can see *why* a student has extra classes, not just a raw bumped number.
+- **What counts as "used"**: only classes the student actually attended (`PRESENT`) draw down the package. An `ABSENT` class is not consumed — the student is still owed it. Change this in `countUsedClasses()` in `src/lib/subscription.ts` if that policy is ever wrong.
+- **Renewing**: from a student's page (`/admin/students/[id]`), open "Renew / change subscription" under the relevant instrument group. This one form shows and lets you edit all three components of the new package together — **plan** (base classes), **carry-forward** (defaults to whatever's unused on the current subscription, e.g. a student on 22/24 renewing shows 2 pre-filled so those classes aren't lost), and **bonus classes** (with a reason) — plus a live running total, so you review the full picture before submitting rather than adding bonus classes as an afterthought. Submitting closes the old subscription (status → `EXPIRED`, used-classes frozen at that moment) and creates the new one with `baseClasses + carryForwardClasses + bonus` all set atomically. Past subscriptions are listed (collapsed), showing their base/carry-forward/bonus breakdown.
+- **Renewal-due signal**: a subscription shows "Renew soon" once 2 or fewer classes remain, and "Renewal overdue" at 0 — visible on the student's page, on `/admin/attendance`'s student list, and to the parent.
+- **Finding who needs a renewal** (`/admin/students`): every row shows each active subscription's used/total classes and expiry date directly, colored by urgency. Four combinable filters — status, instrument, renewal state (renewing this month / renew soon / overdue), and sort (newest joined / soonest renewal / fewest classes remaining) — replace what used to be single-select pills, since pills don't compose and stop being usable once the student list runs into the hundreds (`src/components/student-filter-fields.tsx`). Picking a renewal filter narrows each row down to just the subscription(s) that matched it, so a student with one healthy and one overdue instrument doesn't bury the reason they're in the list.
+
+## Attendance
+
+Marking only ever needs **instrument + date, bulk** — `/admin/attendance` and `/teacher/attendance` open on a simple "pick an instrument, pick a date" form, no batch or time-slot selection at all. Loading a class shows the default roster: active students actually scheduled for that instrument **on that day of the week** (`dayCodeFromDate()` in `src/lib/schedule.ts` maps the picked date to TUE/WED/etc., matched against each enrollment's batch). A student enrolled Tue+Thu for Guitar won't default into a Wednesday Guitar roster just because it's the same instrument — that's what the ad-hoc search below is for. The roster renders in one table (`src/components/bulk-attendance-fields.tsx`), submitted in a single action (`markBulkAttendance()` in `src/lib/attendance.ts`) rather than one student at a time.
+
+There's no present/absent toggle — **being in the list to save is what marks a student present.** Most of a class shows up, so the roster starts pre-filled with everyone scheduled; if someone didn't attend, click **Remove** instead of picking "absent" for them. A removed student gets no attendance record at all for that date (not an explicit absence) — this is a deliberate choice to keep marking a single "who was here" action rather than two, at the cost of "classes recorded"/attendance-rate figures no longer reflecting misses going forward the way historical `ABSENT` rows (from before this change) still do. `markBulkAttendance()` treats the submitted student list as the complete truth for that instrument+date: it deletes any existing record for someone no longer in the list (so un-marking a past mistake actually clears it) and upserts everyone else as `PRESENT`.
+
+`Attendance` isn't tied to a `Batch` or a standing `Enrollment` — it's keyed directly by `(studentId, courseId, date)`. Marking only ever answers "did this student attend this instrument on this date" — which specific time-slot/batch they're normally in doesn't matter, only the day does. That's deliberate: a student can be marked for a **reschedule** or a **comp class** (e.g. filling in for an absent teacher) on a day that isn't their usual batch, and it still counts toward their subscription for that instrument since subscriptions already pool by course — adding one via search and saving marks them present the same way, no separate status step. On the marking screen, "Add a student (reschedule / comp class)" is a type-ahead search scoped to that same instrument only — other students already enrolled in it, just on a *different* day (the likeliest reschedule case, e.g. Arjun's Tue/Thu Guitar slot surfacing when adding him to a one-off Wednesday class) — not the whole academy, so a Carnatic Vocals class never turns up Guitar-only students. It never renders the full list, just up to 8 matches as you type. Selected students are tagged "comp" and can be removed before saving just like a normal roster student; nothing about their normal enrollments changes. Revisiting an instrument+date that already had a comp student marked shows them automatically (still tagged "comp") — their attendance was never lost, it just wasn't in the normal roster to re-display.
+
+Teachers only see instruments they actually teach (have at least one batch of) in the picker, and `markBulkAttendanceAsTeacher()` checks that server-side too — but their roster for an instrument merges every batch/day of theirs for that course, not just one.
+
+Each page also has a **tracking** side — search a student and see one *combined* attendance log per instrument (not split into separate cards per batch/day-slot the way it used to be), alongside their subscription progress. That combined view is on `/admin/attendance` (search section), `/admin/students/[id]`, `/teacher/students/[id]` (read-only — marking happens on `/teacher/attendance`), and the parent portal.
+
+`/admin/batches` (managing the full weekly grid — creating batches, assigning teachers/rooms) is the one place that still deals with individual batches, and keeps the three facet filters — Instrument, Day, Time (`src/components/batch-filter-fields.tsx`). Each filter only ever lists values that actually exist among the current batches (so you're never offered a combination with zero results), and picking one auto-submits immediately — no separate search button to click. This replaced an earlier free-text search box that made it hard to jump straight to, say, "just Carnatic Vocals" without it getting lost among everything else matching a loose text query — especially once the full weekly timetable (all instrument × day × time combinations) is loaded and the batch count runs into the hundreds.
+
+## Reports
+
+`/admin/reports` — four filterable reports (Students, Leads, Attendance, Invoices & tax), each following the same pattern: a filter form (GET query params, so a filtered view is a shareable URL), a capped on-page preview (100–150 rows, with a note when the full result is larger), and a **Download CSV** button that hits a matching Route Handler (`.../export/route.ts`) with the exact same query params — the download always matches what's on screen, never a stale or unfiltered set. Query logic and CSV columns live once in `src/lib/reports/*.ts`, shared by both the page and its export route so they can't drift apart. CSV writing itself (`src/lib/csv.ts`) is a minimal RFC 4180 encoder — quotes only where a field actually needs it (commas, quotes, newlines), CRLF line endings for Excel.
+
+- **Students** — status, instrument, gender, join-date range, free-text search. Columns include every core field plus enrolled instruments/batches, active subscriptions, and guardian details.
+- **Leads** — status, source, interested instrument, created-date range, search. Includes the most recent follow-up and the converted student's ID, if any.
+- **Attendance** — instrument, status, date range, student search. One row per attendance record.
+- **Invoices & tax** — the one built specifically to file monthly GST: defaults to the **current calendar month** (not "all invoices ever") when no date range is given, and the page shows a summary row of Taxable Amount / CGST / SGST / Total Invoiced for the filtered period before you even download, so you can sanity-check the return total against the report. Both the summary and the CSV use each invoice's stored GST breakdown (see "Billing" above) rather than recalculating it.
+
+## Search
+
+Every admin list page (Leads, Students, Attendance, Courses, Batches, Teachers, Billing) and the teacher's batch list has a search box in the page header — it's a plain GET query param (`?q=`), so it works without JavaScript and composes with existing filters (e.g. leads' status filter).
+
+## Tech notes
+
+- **Database**: SQLite via Prisma (`prisma/schema.prisma`). Swap the `DATABASE_URL` in `.env` and provider in the schema to move to Postgres/MySQL later — the app code doesn't need to change.
+- **Auth**: NextAuth v5 (credentials + JWT), role stored on the `User` model (`ADMIN` / `TEACHER` / `PARENT`). Route access is enforced in `src/middleware.ts`.
+- **New teacher/guardian accounts**: created with a temporary password (`password123` by default) — have them sign in and note it, there's no password reset flow yet.
+- This is set up for local use only. To host it online later, swap SQLite for a hosted Postgres database and deploy to a host like Vercel or Railway (set `DATABASE_URL` and `AUTH_SECRET` there).
+- **After resetting the database** (`prisma migrate reset`), sign out and back in. Sessions are JWTs carrying the logged-in user's database ID; a reset regenerates all IDs, so a stale session will fail on the first action that uses your own ID as a foreign key (e.g. logging a lead, granting bonus classes) with a foreign-key-constraint error. Read-only pages keep working, which is why this can look fine right up until you try to submit something.
