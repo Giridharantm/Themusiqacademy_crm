@@ -6,6 +6,10 @@ import { prisma } from "@/lib/prisma";
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
+  // Needed once this runs behind a reverse proxy (Docker/VPS deployments) so
+  // NextAuth trusts the forwarded host/proto headers instead of rejecting
+  // the request. Harmless locally.
+  trustHost: true,
   providers: [
     Credentials({
       credentials: {

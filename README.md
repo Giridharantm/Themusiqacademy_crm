@@ -1,17 +1,22 @@
 # The Musiq Academy CRM
 
-Leads, students, attendance, billing and role-based portals for a music academy — built with Next.js, Prisma and SQLite.
+Leads, students, attendance, billing and role-based portals for a music academy — built with Next.js, Prisma and Postgres.
 
 ## Running locally
 
+Postgres needs to be running before the app — the easiest way is via the `db` service in `docker-compose.yml` (see "Deployment" below), which also matches what production runs:
+
 ```bash
+docker compose up -d db          # starts Postgres, exposed on localhost:5432 only
+cp .env.example .env             # set DATABASE_URL to point at it, generate an AUTH_SECRET
 npm install
+npx prisma migrate deploy        # first run only — creates the schema
 npm run dev
 ```
 
 Open http://localhost:3000 — you'll be redirected to `/login`.
 
-The database (`prisma/dev.db`) currently holds the academy's real migrated data — 345 students, 310 leads, batches, attendance and subscription history imported from their previous CRM (see "Data note" below), not the original demo seed. `npx prisma migrate reset` will wipe that and restore `prisma/seed.ts`'s small synthetic dataset instead — **don't run it against this database without a backup**, since it isn't reversible.
+The database currently holds the academy's real migrated data — 345 students, 310 leads, batches, attendance and subscription history imported from their previous CRM (see "Data note" below), not the original demo seed. `npx prisma migrate reset` will wipe that and restore `prisma/seed.ts`'s small synthetic dataset instead — **don't run it against this database without a backup**, since it isn't reversible.
 
 ## Demo logins
 
@@ -119,11 +124,25 @@ Each page also has a **tracking** side — search a student and see one *combine
 
 Every admin list page (Leads, Students, Attendance, Courses, Batches, Teachers, Billing) and the teacher's batch list has a search box in the page header — it's a plain GET query param (`?q=`), so it works without JavaScript and composes with existing filters (e.g. leads' status filter).
 
+## Deployment
+
+Runs as two Docker containers — the app and Postgres — via `docker-compose.yml`:
+
+```bash
+cp .env.example .env   # set a real AUTH_SECRET (npx auth secret) — DATABASE_URL is wired up by compose
+docker compose up --build -d
+```
+
+- The `app` container's entrypoint (`docker-entrypoint.sh`) runs `prisma migrate deploy` before starting the server, so every deploy applies pending migrations automatically — nothing manual to run on the server.
+- Postgres data lives in the named volume `crm_postgres_data`, and its port (5432) is bound to `127.0.0.1` only — reachable from the host for local tooling (a DB GUI, a one-off script), not from outside the machine.
+- Put a reverse proxy (Caddy, nginx, Traefik) in front of the `app` container's port 3000 for TLS — `trustHost: true` is already set in `src/lib/auth.ts` so NextAuth trusts the proxy's forwarded headers.
+- **Backups**: `docker compose exec db pg_dump -U crm crm > backup.sql` — do this on a schedule, this app has no built-in backup mechanism.
+
 ## Tech notes
 
-- **Database**: SQLite via Prisma (`prisma/schema.prisma`). Swap the `DATABASE_URL` in `.env` and provider in the schema to move to Postgres/MySQL later — the app code doesn't need to change.
+- **Database**: Postgres via Prisma (`prisma/schema.prisma`). Local dev also just points `DATABASE_URL` at Postgres (e.g. `docker compose up -d db`) — there's no SQLite fallback anymore.
 - **UI theme**: "Vinyl Label" — a retro record-sleeve palette (deep teal, coral, sunshine yellow on warm cream) defined as CSS custom properties in `src/app/globals.css`'s `@theme` block, including a retint of Tailwind's own `indigo`/`slate` scales so most of the app picked it up automatically. Shared primitives (`Card`, `Button`, `Badge`, `StatCard`, `Input`, etc.) live in `src/components/ui.tsx` — use those and the `vinyl-*`/retinted-`slate` color tokens for anything new rather than hardcoding colors.
 - **Auth**: NextAuth v5 (credentials + JWT), role stored on the `User` model (`ADMIN` / `TEACHER` / `PARENT`). Route access is enforced in `src/middleware.ts`.
 - **New teacher/guardian accounts**: created with a temporary password (`password123` by default) — have them sign in and note it, there's no password reset flow yet.
-- This is set up for local use only. To host it online later, swap SQLite for a hosted Postgres database and deploy to a host like Vercel or Railway (set `DATABASE_URL` and `AUTH_SECRET` there).
+- See "Deployment" above for running this in Docker on a VPS/cloud VM.
 - **After resetting the database** (`prisma migrate reset`), sign out and back in. Sessions are JWTs carrying the logged-in user's database ID; a reset regenerates all IDs, so a stale session will fail on the first action that uses your own ID as a foreign key (e.g. logging a lead, granting bonus classes) with a foreign-key-constraint error. Read-only pages keep working, which is why this can look fine right up until you try to submit something.

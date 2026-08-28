@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crmdevpassword}
+      POSTGRES_DB: crm
+    volumes:
+      - crm_postgres_data:/var/lib/postgresql/data
+    ports:
+      # Bound to localhost only — for local tooling (a DB GUI, one-off
+      # scripts), not reachable from outside the host even if the VPS
+      # firewall is misconfigured.
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://crm:${POSTGRES_PASSWORD:-crmdevpassword}@db:5432/crm
+      AUTH_SECRET: ${AUTH_SECRET}
+
+volumes:
+  crm_postgres_data:
