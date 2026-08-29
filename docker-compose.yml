@@ -25,11 +25,26 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     environment:
       DATABASE_URL: postgresql://crm:${POSTGRES_PASSWORD:-crmdevpassword}@db:5432/crm
       AUTH_SECRET: ${AUTH_SECRET}
 
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   crm_postgres_data:
+  caddy_data:
+  caddy_config:

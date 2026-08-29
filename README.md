@@ -126,7 +126,7 @@ Every admin list page (Leads, Students, Attendance, Courses, Batches, Teachers, 
 
 ## Deployment
 
-Runs as two Docker containers — the app and Postgres — via `docker-compose.yml`:
+Runs as three Docker containers — the app, Postgres, and a Caddy reverse proxy — via `docker-compose.yml`:
 
 ```bash
 cp .env.example .env   # set a real AUTH_SECRET (npx auth secret) — DATABASE_URL is wired up by compose
@@ -135,7 +135,9 @@ docker compose up --build -d
 
 - The `app` container's entrypoint (`docker-entrypoint.sh`) runs `prisma migrate deploy` before starting the server, so every deploy applies pending migrations automatically — nothing manual to run on the server.
 - Postgres data lives in the named volume `crm_postgres_data`, and its port (5432) is bound to `127.0.0.1` only — reachable from the host for local tooling (a DB GUI, a one-off script), not from outside the machine.
-- Put a reverse proxy (Caddy, nginx, Traefik) in front of the `app` container's port 3000 for TLS — `trustHost: true` is already set in `src/lib/auth.ts` so NextAuth trusts the proxy's forwarded headers.
+- **Caddy** (`Caddyfile`) fronts the app on ports 80/443 and gives it automatic HTTPS via Let's Encrypt once a real domain (not a bare IP) is set as the site address — `trustHost: true` is already set in `src/lib/auth.ts` so NextAuth trusts Caddy's forwarded headers. The app container itself only `expose`s port 3000 internally to the Compose network, not to the host.
+- On a fresh VM, also open ports 80/443 in **both** the cloud provider's firewall (e.g. an Oracle Cloud Security List, an AWS Security Group) and the OS-level firewall (`ufw`/`iptables`) — Ubuntu images on some providers ship with a default-deny `iptables` policy that only allows SSH.
+- If the host has 1-2GB RAM, add a swap file before the first `docker compose up --build` — the Next.js build step is memory-hungry: `sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile`.
 - **Backups**: `docker compose exec db pg_dump -U crm crm > backup.sql` — do this on a schedule, this app has no built-in backup mechanism.
 
 ## Tech notes
