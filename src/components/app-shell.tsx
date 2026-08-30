@@ -33,7 +33,12 @@ export function AppShell({
             </nav>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-vinyl-cream/70 hidden sm:inline">{userName}</span>
+            <Link
+              href="/account"
+              className="text-sm text-vinyl-cream/70 hover:text-vinyl-cream hidden sm:inline px-2 py-1 rounded-md hover:bg-white/10"
+            >
+              {userName}
+            </Link>
             <form action={logoutAction}>
               <button className="text-sm text-vinyl-cream/85 hover:text-vinyl-cream px-3 py-1.5 rounded-md hover:bg-white/10">
                 Sign out

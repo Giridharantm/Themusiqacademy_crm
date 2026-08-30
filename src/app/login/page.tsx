@@ -46,10 +46,6 @@ export default function LoginPage() {
             {pending ? "Signing in..." : "Sign in"}
           </button>
         </form>
-        <div className="mt-6 text-xs text-vinyl-cream/60 text-center space-y-1">
-          <p>Demo accounts (password: password123)</p>
-          <p>admin@musiqacademy.test · teacher.ravi@musiqacademy.test</p>
-        </div>
       </div>
     </div>
   );
