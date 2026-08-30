@@ -28,7 +28,8 @@ export default async function AdminDashboard() {
   const totalOpenLeads = leadCounts
     .filter((l) => l.status !== "CONVERTED" && l.status !== "LOST")
     .reduce((sum, l) => sum + l._count, 0);
-  const leadsHint = `New ${leadCountByStatus.NEW ?? 0} · Contacted ${leadCountByStatus.CONTACTED ?? 0} · Trial ${leadCountByStatus.TRIAL_SCHEDULED ?? 0}`;
+  const trialCount = (leadCountByStatus.TRIAL_SCHEDULED ?? 0) + (leadCountByStatus.TRIAL_COMPLETED ?? 0);
+  const leadsHint = `New ${leadCountByStatus.NEW ?? 0} · Contacted ${leadCountByStatus.CONTACTED ?? 0} · Trial ${trialCount}`;
 
   const revenueThisMonth = invoices
     .flatMap((i) => i.payments)

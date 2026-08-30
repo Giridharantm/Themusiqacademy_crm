@@ -15,7 +15,7 @@ export async function getLeadReportRows(filters: LeadReportFilters) {
   const { status, source, courseId, dateFrom, dateTo, q } = filters;
   return prisma.lead.findMany({
     where: {
-      status: status ? (status as "NEW" | "CONTACTED" | "TRIAL_SCHEDULED" | "CONVERTED" | "LOST") : undefined,
+      status: status ? (status as "NEW" | "CONTACTED" | "TRIAL_SCHEDULED" | "TRIAL_COMPLETED" | "CONVERTED" | "LOST") : undefined,
       source: source ? (source as "CALL" | "WALK_IN" | "REFERRAL" | "ONLINE" | "OTHER") : undefined,
       interestedCourseId: courseId || undefined,
       createdAt: {

@@ -9,6 +9,7 @@ const statusColors: Record<string, string> = {
   NEW: "blue",
   CONTACTED: "yellow",
   TRIAL_SCHEDULED: "purple",
+  TRIAL_COMPLETED: "purple",
   CONVERTED: "green",
   LOST: "red",
 };
@@ -140,6 +141,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                   <option value="NEW">New</option>
                   <option value="CONTACTED">Contacted</option>
                   <option value="TRIAL_SCHEDULED">Trial scheduled</option>
+                  <option value="TRIAL_COMPLETED">Trial completed</option>
                   <option value="CONVERTED">Converted</option>
                   <option value="LOST">Lost</option>
                 </Select>

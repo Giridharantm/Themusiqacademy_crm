@@ -38,7 +38,7 @@ export async function updateLeadStatus(leadId: string, status: string) {
   await requireRole("ADMIN");
   await prisma.lead.update({
     where: { id: leadId },
-    data: { status: status as "NEW" | "CONTACTED" | "TRIAL_SCHEDULED" | "CONVERTED" | "LOST" },
+    data: { status: status as "NEW" | "CONTACTED" | "TRIAL_SCHEDULED" | "TRIAL_COMPLETED" | "CONVERTED" | "LOST" },
   });
   revalidatePath(`/admin/leads/${leadId}`);
   revalidatePath("/admin/leads");

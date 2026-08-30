@@ -9,6 +9,7 @@ const statusColors: Record<string, string> = {
   NEW: "blue",
   CONTACTED: "yellow",
   TRIAL_SCHEDULED: "purple",
+  TRIAL_COMPLETED: "purple",
   CONVERTED: "green",
   LOST: "red",
 };
@@ -25,7 +26,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           status === "open"
             ? { notIn: ["CONVERTED", "LOST"] }
             : status
-              ? (status as "NEW" | "CONTACTED" | "TRIAL_SCHEDULED" | "CONVERTED" | "LOST")
+              ? (status as "NEW" | "CONTACTED" | "TRIAL_SCHEDULED" | "TRIAL_COMPLETED" | "CONVERTED" | "LOST")
               : undefined,
         OR: q ? [{ name: { contains: q } }, { phone: { contains: q } }, { email: { contains: q } }] : undefined,
       },
@@ -35,7 +36,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
     prisma.course.findMany({ orderBy: { name: "asc" } }),
   ]);
 
-  const statuses = ["NEW", "CONTACTED", "TRIAL_SCHEDULED", "CONVERTED", "LOST"];
+  const statuses = ["NEW", "CONTACTED", "TRIAL_SCHEDULED", "TRIAL_COMPLETED", "CONVERTED", "LOST"];
 
   return (
     <div>
