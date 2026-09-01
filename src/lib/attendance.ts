@@ -5,36 +5,34 @@ export function parseDateOnly(dateStr: string) {
   return new Date(year, month - 1, day);
 }
 
-// Marks attendance for a whole class session at once — the usual case being
-// 6-8 students in one instrument's class on one date. `studentIds` is
-// exactly who attended: everyone still in the list (the roster, minus
-// anyone removed as a no-show, plus any comp/reschedule students added for
-// this session) is marked PRESENT — being in the list to save IS the
-// "present" signal, so there's no separate present/absent choice. Anyone
-// removed simply gets no record at all rather than an explicit ABSENT one:
-// this call deletes any existing record for this course+date that isn't in
-// the submitted list, so re-editing a date to remove someone actually
-// clears their prior mark instead of leaving it stale. Attendance is keyed
-// by (student, course, date) — not tied to a specific batch/time-slot — so
-// a student can attend a one-off makeup class on a day that isn't their
-// usual batch and it's still recorded correctly.
-export async function markBulkAttendance(courseId: string, dateStr: string, formData: FormData, markedById: string) {
+// Marks one student present for one instrument+date — being marked IS the
+// "present" signal, so there's no separate present/absent choice. Each call
+// only ever touches that one student's own record: earlier bulk marking
+// treated "whoever's in the submitted list" as the complete truth for the
+// whole class and deleted anyone else's record for that date, which meant
+// two people marking the same class (a stale tab, a second admin, a reload
+// after someone else already saved) could silently wipe each other's work
+// with no trace. Per-student marking makes that class of bug impossible —
+// there's nothing to overwrite. Attendance is keyed by (student, course,
+// date) — not tied to a specific batch/time-slot — so a student can attend
+// a one-off makeup class on a day that isn't their usual batch and it's
+// still recorded correctly.
+export async function markStudentPresent(studentId: string, courseId: string, dateStr: string, markedById: string) {
   if (!dateStr) throw new Error("Date is required");
   const date = parseDateOnly(dateStr);
 
-  const studentIds = formData.getAll("studentIds").map(String);
-
-  await prisma.attendance.deleteMany({
-    where: { courseId, date, studentId: { notIn: studentIds } },
+  await prisma.attendance.upsert({
+    where: { studentId_courseId_date: { studentId, courseId, date } },
+    update: { status: "PRESENT", markedById },
+    create: { studentId, courseId, date, status: "PRESENT", markedById },
   });
+}
 
-  for (const studentId of studentIds) {
-    await prisma.attendance.upsert({
-      where: { studentId_courseId_date: { studentId, courseId, date } },
-      update: { status: "PRESENT", markedById },
-      create: { studentId, courseId, date, status: "PRESENT", markedById },
-    });
-  }
+// Clears a single student's attendance record for this instrument+date —
+// the counterpart to markStudentPresent, scoped to exactly one record.
+export async function unmarkStudentAttendance(studentId: string, courseId: string, dateStr: string) {
+  if (!dateStr) throw new Error("Date is required");
+  const date = parseDateOnly(dateStr);
 
-  return studentIds;
+  await prisma.attendance.deleteMany({ where: { studentId, courseId, date } });
 }

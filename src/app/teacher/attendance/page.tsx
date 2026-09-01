@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/authz";
-import { markBulkAttendanceAsTeacher } from "@/lib/actions/teacher-actions";
+import { markStudentPresentAsTeacher, unmarkStudentAsTeacher } from "@/lib/actions/teacher-actions";
 import { Card, CardBody, CardHeader, PageHeader, Button, Select, EmptyState } from "@/components/ui";
-import { BulkAttendanceFields } from "@/components/bulk-attendance-fields";
-import { DAY_LABELS, dayCodeFromDate } from "@/lib/schedule";
+import { AttendanceRoster } from "@/components/attendance-roster";
+import { DAY_LABELS, dayCodeFromDate, formatTimeLabel } from "@/lib/schedule";
 import { format } from "date-fns";
 
 function toDateInputValue(date: Date) {
@@ -35,8 +35,9 @@ export default async function TeacherAttendancePage({
 
   const selectedCourse = courseId ? myCourses.find((c) => c.id === courseId) : null;
 
-  let roster: { id: string; name: string }[] = [];
-  let additionalAttendees: { id: string; name: string }[] = [];
+  type RosterStudent = { id: string; name: string; marked: boolean };
+  let batchGroups: { batchId: string; label: string; students: RosterStudent[] }[] = [];
+  let otherStudents: RosterStudent[] = [];
   let addableStudents: { id: string; name: string; studentCode: string }[] = [];
 
   if (selectedCourse) {
@@ -48,8 +49,8 @@ export default async function TeacherAttendancePage({
       // instrument with this teacher on other days.
       prisma.enrollment.findMany({
         where: { status: "ACTIVE", batch: { courseId: selectedCourse.id, teacherId: user.id, dayOfWeek: selectedDayCode } },
-        include: { student: true },
-        orderBy: { student: { name: "asc" } },
+        include: { student: true, batch: true },
+        orderBy: [{ batch: { startTime: "asc" } }, { student: { name: "asc" } }],
       }),
       // Same instrument with this teacher, any day — this instrument's own
       // reschedule/comp pool. The search only ever offers students of the
@@ -61,20 +62,41 @@ export default async function TeacherAttendancePage({
       }),
       prisma.attendance.findMany({ where: { courseId: selectedCourse.id, date: parseDateOnly(selectedDate) }, include: { student: true } }),
     ]);
-    // A student can hold several of the teacher's same-day batches for the
-    // same instrument (rare, but possible) — dedupe.
-    const rosterMap = new Map<string, string>();
-    for (const e of enrollments) rosterMap.set(e.studentId, e.student.name);
-    roster = Array.from(rosterMap, ([id, name]) => ({ id, name }));
-    const rosterIds = new Set(roster.map((r) => r.id));
-    additionalAttendees = existingAttendance
-      .filter((a) => !rosterIds.has(a.studentId))
-      .map((a) => ({ id: a.studentId, name: a.student.name }));
+
+    const markedIds = new Set(existingAttendance.map((a) => a.studentId));
+
+    // Group the roster by batch — a teacher can run several time slots on
+    // the same day, and marking 30+ students needs to show which batch
+    // each one belongs to, not one flat alphabetical list.
+    const groupMap = new Map<string, { batchId: string; label: string; students: RosterStudent[] }>();
+    for (const e of enrollments) {
+      const b = e.batch;
+      if (!groupMap.has(b.id)) {
+        groupMap.set(b.id, {
+          batchId: b.id,
+          label: `${formatTimeLabel(b.startTime)} - ${formatTimeLabel(b.endTime)}`,
+          students: [],
+        });
+      }
+      groupMap.get(b.id)!.students.push({ id: e.studentId, name: e.student.name, marked: markedIds.has(e.studentId) });
+    }
+    batchGroups = Array.from(groupMap.values());
+
+    const groupedIds = new Set(batchGroups.flatMap((g) => g.students.map((s) => s.id)));
+    otherStudents = existingAttendance
+      .filter((a) => !groupedIds.has(a.studentId))
+      .map((a) => ({ id: a.studentId, name: a.student.name, marked: true }));
+
+    const otherIds = new Set(otherStudents.map((s) => s.id));
     const sameCourseMap = new Map(sameCourseEnrollments.map((e) => [e.studentId, e.student]));
     addableStudents = Array.from(sameCourseMap.values())
-      .filter((s) => !rosterIds.has(s.id) && !additionalAttendees.some((a) => a.id === s.id))
+      .filter((s) => !groupedIds.has(s.id) && !otherIds.has(s.id))
       .map((s) => ({ id: s.id, name: s.name, studentCode: s.studentCode }));
   }
+
+  const totalRosterCount = batchGroups.reduce((sum, g) => sum + g.students.length, 0) + otherStudents.length;
+  const markedRosterCount =
+    batchGroups.reduce((sum, g) => sum + g.students.filter((s) => s.marked).length, 0) + otherStudents.length;
 
   return (
     <div>
@@ -120,18 +142,20 @@ export default async function TeacherAttendancePage({
             <Card>
               <CardHeader
                 title={`${selectedCourse.name} · ${format(parseDateOnly(selectedDate), "EEEE, d MMM yyyy")}`}
-                subtitle={`${roster.length} student${roster.length !== 1 ? "s" : ""} enrolled in your ${selectedCourse.name} batches on ${DAY_LABELS[dayCodeFromDate(parseDateOnly(selectedDate))]}s`}
+                subtitle={`${totalRosterCount} student${totalRosterCount !== 1 ? "s" : ""} in your ${selectedCourse.name} batches on ${DAY_LABELS[dayCodeFromDate(parseDateOnly(selectedDate))]}s`}
               />
               <CardBody>
-                <form action={markBulkAttendanceAsTeacher.bind(null, selectedCourse.id, selectedDate)} className="space-y-4">
-                  <BulkAttendanceFields
-                    key={`${selectedCourse.id}-${selectedDate}`}
-                    roster={roster}
-                    additionalAttendees={additionalAttendees}
-                    addableStudents={addableStudents}
-                  />
-                  <Button type="submit" className="w-full">Save attendance for {format(parseDateOnly(selectedDate), "d MMM yyyy")}</Button>
-                </form>
+                <AttendanceRoster
+                  courseId={selectedCourse.id}
+                  dateStr={selectedDate}
+                  batchGroups={batchGroups}
+                  otherStudents={otherStudents}
+                  addableStudents={addableStudents}
+                  markedCount={markedRosterCount}
+                  totalCount={totalRosterCount}
+                  markAction={markStudentPresentAsTeacher}
+                  unmarkAction={unmarkStudentAsTeacher}
+                />
               </CardBody>
             </Card>
           )}

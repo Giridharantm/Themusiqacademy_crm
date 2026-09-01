@@ -3,32 +3,33 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/authz";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { markBulkAttendance } from "@/lib/attendance";
+import { markStudentPresent, unmarkStudentAttendance } from "@/lib/attendance";
 
-// Marks attendance for every student in a class session (everyone enrolled
-// in that instrument, plus any comp/reschedule students added for this
-// session) in one submission — restricted to instruments this teacher
-// actually teaches (has at least one batch of).
-export async function markBulkAttendanceAsTeacher(courseId: string, dateStr: string, formData: FormData) {
-  const user = await requireRole("TEACHER");
-
-  const teaches = await prisma.batch.findFirst({ where: { teacherId: user.id, courseId } });
+async function requireTeachesCourse(teacherId: string, courseId: string) {
+  const teaches = await prisma.batch.findFirst({ where: { teacherId, courseId } });
   if (!teaches) throw new Error("Not authorized for this instrument");
+}
 
-  const studentIds = await markBulkAttendance(courseId, dateStr, formData, user.id);
-
+function revalidateAttendance(studentId: string) {
   revalidatePath("/teacher/attendance");
-  for (const studentId of studentIds) {
-    revalidatePath(`/teacher/students/${studentId}`);
-    revalidatePath(`/parent/students/${studentId}`);
-  }
+  revalidatePath(`/teacher/students/${studentId}`);
+  revalidatePath(`/parent/students/${studentId}`);
+}
 
-  // A plain revalidate leaves the roster's client component mounted with its
-  // pre-save state (radios, comp list), so a successful save could look like
-  // nothing happened. Redirecting back to the same class forces a real
-  // navigation that remounts it with the confirmed, saved state.
-  redirect(`/teacher/attendance?courseId=${courseId}&date=${dateStr}`);
+// Marks one student present for an instrument+date — restricted to
+// instruments this teacher actually teaches (has at least one batch of).
+export async function markStudentPresentAsTeacher(studentId: string, courseId: string, dateStr: string) {
+  const user = await requireRole("TEACHER");
+  await requireTeachesCourse(user.id, courseId);
+  await markStudentPresent(studentId, courseId, dateStr, user.id);
+  revalidateAttendance(studentId);
+}
+
+export async function unmarkStudentAsTeacher(studentId: string, courseId: string, dateStr: string) {
+  const user = await requireRole("TEACHER");
+  await requireTeachesCourse(user.id, courseId);
+  await unmarkStudentAttendance(studentId, courseId, dateStr);
+  revalidateAttendance(studentId);
 }
 
 export async function createHomework(batchId: string, formData: FormData) {
