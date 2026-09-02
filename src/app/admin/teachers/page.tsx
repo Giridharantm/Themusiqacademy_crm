@@ -3,14 +3,24 @@ import { prisma } from "@/lib/prisma";
 import { createTeacher } from "@/lib/actions/user-actions";
 import { Card, CardBody, CardHeader, PageHeader, Input, Button, EmptyState, Badge } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
+import { normalizeSearchQuery, phoneSearchDigits } from "@/lib/search";
 
 export default async function TeachersPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const { q } = await searchParams;
+  const q = normalizeSearchQuery((await searchParams).q);
+  const phoneDigits = q ? phoneSearchDigits(q) : undefined;
 
   const teachers = await prisma.user.findMany({
     where: {
       role: "TEACHER",
-      ...(q ? { OR: [{ name: { contains: q } }, { email: { contains: q } }, { phone: { contains: q } }] } : {}),
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" } },
+              { email: { contains: q, mode: "insensitive" } },
+              ...(phoneDigits ? [{ phone: { contains: phoneDigits } }] : []),
+            ],
+          }
+        : {}),
     },
     include: { _count: { select: { batchesTaught: true } } },
     orderBy: { name: "asc" },

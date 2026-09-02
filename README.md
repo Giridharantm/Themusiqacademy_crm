@@ -123,7 +123,7 @@ Each page also has a **tracking** side — search a student and see one *combine
 
 ## Search
 
-Every admin list page (Leads, Students, Attendance, Courses, Batches, Teachers, Billing) and the teacher's batch list has a search box in the page header — it's a plain GET query param (`?q=`), so it works without JavaScript and composes with existing filters (e.g. leads' status filter).
+Every admin list page (Leads, Students, Attendance, Courses, Batches, Teachers, Billing) and the teacher's batch list has a search box in the page header — it's a plain GET query param (`?q=`), so it works without JavaScript and composes with existing filters (e.g. leads' status filter). `src/lib/search.ts` has the shared normalization every page's `where` clause applies: the query is trimmed and matched case-insensitively (`mode: "insensitive"`), and matches against a phone field strip everything but digits from the query first, so "+91 918-741-1327" still finds a student stored as `9187411327`.
 
 ## Deployment
 

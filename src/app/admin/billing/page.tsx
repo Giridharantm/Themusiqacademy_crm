@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Card, CardBody, CardHeader, PageHeader, Badge, EmptyState, Button, StatCard } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
+import { normalizeSearchQuery } from "@/lib/search";
 import { format } from "date-fns";
 
 const statusColors: Record<string, string> = {
@@ -13,11 +14,16 @@ const statusColors: Record<string, string> = {
 };
 
 export default async function BillingPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const { q } = await searchParams;
+  const q = normalizeSearchQuery((await searchParams).q);
 
   const invoices = await prisma.invoice.findMany({
     where: q
-      ? { OR: [{ invoiceNumber: { contains: q } }, { student: { name: { contains: q } } }] }
+      ? {
+          OR: [
+            { invoiceNumber: { contains: q, mode: "insensitive" } },
+            { student: { name: { contains: q, mode: "insensitive" } } },
+          ],
+        }
       : undefined,
     include: { student: true, payments: true },
     orderBy: { issueDate: "desc" },

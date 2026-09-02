@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/attendance";
+import { normalizeSearchQuery, phoneSearchDigits } from "@/lib/search";
 import type { CsvColumn } from "@/lib/csv";
 
 export type StudentReportFilters = {
@@ -12,7 +13,9 @@ export type StudentReportFilters = {
 };
 
 export async function getStudentReportRows(filters: StudentReportFilters) {
-  const { status, courseId, gender, joinedFrom, joinedTo, q } = filters;
+  const { status, courseId, gender, joinedFrom, joinedTo, q: rawQ } = filters;
+  const q = normalizeSearchQuery(rawQ);
+  const phoneDigits = q ? phoneSearchDigits(q) : undefined;
   return prisma.student.findMany({
     where: {
       status: status || undefined,
@@ -25,10 +28,10 @@ export async function getStudentReportRows(filters: StudentReportFilters) {
       ...(q
         ? {
             OR: [
-              { name: { contains: q } },
-              { phone: { contains: q } },
-              { email: { contains: q } },
-              { studentCode: { contains: q } },
+              { name: { contains: q, mode: "insensitive" } },
+              ...(phoneDigits ? [{ phone: { contains: phoneDigits } }] : []),
+              { email: { contains: q, mode: "insensitive" } },
+              { studentCode: { contains: q, mode: "insensitive" } },
             ],
           }
         : {}),

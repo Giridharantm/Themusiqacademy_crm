@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { createLead } from "@/lib/actions/lead-actions";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Input, Select, Textarea, Button, EmptyState } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
+import { normalizeSearchQuery, phoneSearchDigits } from "@/lib/search";
 import { format } from "date-fns";
 
 const statusColors: Record<string, string> = {
@@ -15,7 +16,9 @@ const statusColors: Record<string, string> = {
 };
 
 export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
-  const { status, q } = await searchParams;
+  const { status, q: rawQ } = await searchParams;
+  const q = normalizeSearchQuery(rawQ);
+  const phoneDigits = q ? phoneSearchDigits(q) : undefined;
 
   const [leads, courses] = await Promise.all([
     prisma.lead.findMany({
@@ -28,7 +31,13 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
             : status
               ? (status as "NEW" | "CONTACTED" | "TRIAL_SCHEDULED" | "TRIAL_COMPLETED" | "CONVERTED" | "LOST")
               : undefined,
-        OR: q ? [{ name: { contains: q } }, { phone: { contains: q } }, { email: { contains: q } }] : undefined,
+        OR: q
+          ? [
+              { name: { contains: q, mode: "insensitive" } },
+              ...(phoneDigits ? [{ phone: { contains: phoneDigits } }] : []),
+              { email: { contains: q, mode: "insensitive" } },
+            ]
+          : undefined,
       },
       include: { interestedCourse: true },
       orderBy: { createdAt: "desc" },

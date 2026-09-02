@@ -4,15 +4,23 @@ import { requireRole } from "@/lib/authz";
 import { Card, CardBody, PageHeader, Badge, EmptyState } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
 import { DAY_LABELS, formatTimeLabel, sortBatches } from "@/lib/schedule";
+import { normalizeSearchQuery } from "@/lib/search";
 
 export default async function TeacherDashboard({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const user = await requireRole("TEACHER");
-  const { q } = await searchParams;
+  const q = normalizeSearchQuery((await searchParams).q);
 
   const batchesRaw = await prisma.batch.findMany({
     where: {
       teacherId: user.id,
-      ...(q ? { OR: [{ name: { contains: q } }, { course: { name: { contains: q } } }] } : {}),
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" } },
+              { course: { name: { contains: q, mode: "insensitive" } } },
+            ],
+          }
+        : {}),
     },
     include: { course: true, _count: { select: { enrollments: true } } },
   });

@@ -5,6 +5,7 @@ import { Card, CardBody, CardHeader, PageHeader, Input, Select, Button, EmptySta
 import { SearchBox } from "@/components/search-box";
 import { StudentFilterFields } from "@/components/student-filter-fields";
 import { subscriptionTotals, countUsedClasses, attendanceForSubscription, renewalUrgency } from "@/lib/subscription";
+import { normalizeSearchQuery, phoneSearchDigits } from "@/lib/search";
 import { format } from "date-fns";
 
 const URGENCY_COLORS: Record<string, string> = { ok: "green", soon: "yellow", due: "red" };
@@ -14,7 +15,9 @@ export default async function StudentsPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; courseId?: string; renewal?: string; sort?: string }>;
 }) {
-  const { q, status, courseId, renewal, sort } = await searchParams;
+  const { q: rawQ, status, courseId, renewal, sort } = await searchParams;
+  const q = normalizeSearchQuery(rawQ);
+  const phoneDigits = q ? phoneSearchDigits(q) : undefined;
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -27,10 +30,10 @@ export default async function StudentsPage({
         ...(q
           ? {
               OR: [
-                { name: { contains: q } },
-                { phone: { contains: q } },
-                { email: { contains: q } },
-                { studentCode: { contains: q } },
+                { name: { contains: q, mode: "insensitive" } },
+                ...(phoneDigits ? [{ phone: { contains: phoneDigits } }] : []),
+                { email: { contains: q, mode: "insensitive" } },
+                { studentCode: { contains: q, mode: "insensitive" } },
               ],
             }
           : {}),

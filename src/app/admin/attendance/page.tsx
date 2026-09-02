@@ -7,6 +7,7 @@ import { SubscriptionProgress } from "@/components/subscription-progress";
 import { AttendanceRoster } from "@/components/attendance-roster";
 import { subscriptionTotals, renewalUrgency, countUsedClasses, attendanceForSubscription } from "@/lib/subscription";
 import { DAY_LABELS, dayCodeFromDate, formatTimeLabel } from "@/lib/schedule";
+import { normalizeSearchQuery, phoneSearchDigits } from "@/lib/search";
 import { format } from "date-fns";
 
 function toDateInputValue(date: Date) {
@@ -37,7 +38,9 @@ export default async function AttendancePage({
     studentId?: string;
   }>;
 }) {
-  const { courseId, date: dateParam, q, studentId } = await searchParams;
+  const { courseId, date: dateParam, q: rawQ, studentId } = await searchParams;
+  const q = normalizeSearchQuery(rawQ);
+  const phoneDigits = q ? phoneSearchDigits(q) : undefined;
   const today = toDateInputValue(new Date());
   const selectedDate = dateParam || today;
 
@@ -111,10 +114,10 @@ export default async function AttendancePage({
     where: q
       ? {
           OR: [
-            { name: { contains: q } },
-            { phone: { contains: q } },
-            { email: { contains: q } },
-            { studentCode: { contains: q } },
+            { name: { contains: q, mode: "insensitive" } },
+            ...(phoneDigits ? [{ phone: { contains: phoneDigits } }] : []),
+            { email: { contains: q, mode: "insensitive" } },
+            { studentCode: { contains: q, mode: "insensitive" } },
           ],
         }
       : undefined,

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/attendance";
+import { normalizeSearchQuery, phoneSearchDigits } from "@/lib/search";
 import type { CsvColumn } from "@/lib/csv";
 
 export type LeadReportFilters = {
@@ -12,7 +13,9 @@ export type LeadReportFilters = {
 };
 
 export async function getLeadReportRows(filters: LeadReportFilters) {
-  const { status, source, courseId, dateFrom, dateTo, q } = filters;
+  const { status, source, courseId, dateFrom, dateTo, q: rawQ } = filters;
+  const q = normalizeSearchQuery(rawQ);
+  const phoneDigits = q ? phoneSearchDigits(q) : undefined;
   return prisma.lead.findMany({
     where: {
       status: status ? (status as "NEW" | "CONTACTED" | "TRIAL_SCHEDULED" | "TRIAL_COMPLETED" | "CONVERTED" | "LOST") : undefined,
@@ -22,7 +25,15 @@ export async function getLeadReportRows(filters: LeadReportFilters) {
         gte: dateFrom ? parseDateOnly(dateFrom) : undefined,
         lte: dateTo ? parseDateOnly(dateTo) : undefined,
       },
-      ...(q ? { OR: [{ name: { contains: q } }, { phone: { contains: q } }, { email: { contains: q } }] } : {}),
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" } },
+              ...(phoneDigits ? [{ phone: { contains: phoneDigits } }] : []),
+              { email: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : {}),
     },
     include: {
       interestedCourse: true,

@@ -2,12 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { createCourse, deleteCourse } from "@/lib/actions/course-actions";
 import { Card, CardBody, CardHeader, PageHeader, Input, Textarea, Button, EmptyState, Badge } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
+import { normalizeSearchQuery } from "@/lib/search";
 
 export default async function CoursesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const { q } = await searchParams;
+  const q = normalizeSearchQuery((await searchParams).q);
 
   const courses = await prisma.course.findMany({
-    where: q ? { name: { contains: q } } : undefined,
+    where: q ? { name: { contains: q, mode: "insensitive" } } : undefined,
     include: { _count: { select: { batches: true, leads: true } } },
     orderBy: { name: "asc" },
   });
