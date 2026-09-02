@@ -10,11 +10,12 @@ import {
   deleteEnrollment,
   updateStudentStatus,
 } from "@/lib/actions/student-actions";
-import { createOrRenewSubscription, addBonusClasses, cancelSubscription } from "@/lib/actions/subscription-actions";
+import { createOrRenewSubscription, updateSubscription, addBonusClasses, cancelSubscription } from "@/lib/actions/subscription-actions";
 import { markAttendanceOnDateAsAdmin, removeAttendanceOnDateAsAdmin } from "@/lib/actions/attendance-actions";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Input, Select, Button, EmptyState } from "@/components/ui";
 import { SubscriptionProgress } from "@/components/subscription-progress";
 import { SubscriptionFormFields } from "@/components/subscription-form-fields";
+import { EditSubscriptionFields } from "@/components/edit-subscription-fields";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { EnrollBatchFields } from "@/components/enroll-batch-fields";
 import { subscriptionTotals, countUsedClasses, attendanceForSubscription } from "@/lib/subscription";
@@ -273,6 +274,13 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                                   <Input label="Reason" name="reason" placeholder="e.g. Diwali offer" />
                                 </div>
                                 <Button type="submit" variant="secondary">Add</Button>
+                              </form>
+                            </details>
+                            <details className="inline-block">
+                              <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none">Edit subscription</summary>
+                              <form action={updateSubscription.bind(null, activeSubscription.id, student.id)} className="mt-2 space-y-3 max-w-sm">
+                                <EditSubscriptionFields subscription={activeSubscription} />
+                                <Button type="submit" variant="secondary" className="w-full">Save changes</Button>
                               </form>
                             </details>
                             <form action={cancelSubscription.bind(null, activeSubscription.id, student.id)}>

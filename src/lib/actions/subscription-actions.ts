@@ -94,6 +94,35 @@ export async function addBonusClasses(subscriptionId: string, studentId: string,
   revalidatePath(`/parent/students/${studentId}`);
 }
 
+// Corrects fields on the subscription that's still active — a typo in the
+// start date, the wrong plan picked, a carry-forward number that needs
+// fixing — without treating it as a renewal. Unlike createOrRenewSubscription,
+// this never closes/freezes anything or touches usage stats.
+export async function updateSubscription(subscriptionId: string, studentId: string, formData: FormData) {
+  await requireRole("ADMIN");
+
+  const plan = String(formData.get("plan") ?? "ONE_MONTH") as SubscriptionPlan;
+  const baseClasses = plan === "CUSTOM" ? Number(formData.get("baseClasses") ?? 0) : PLAN_CLASSES[plan];
+  if (!baseClasses || baseClasses <= 0) throw new Error("A valid number of classes is required");
+
+  const carryForwardClasses = Math.max(0, Number(formData.get("carryForwardClasses") ?? 0));
+
+  const startDateRaw = String(formData.get("startDate") ?? "");
+  const startDate = startDateRaw ? new Date(startDateRaw) : new Date();
+  startDate.setHours(0, 0, 0, 0);
+
+  const endDateRaw = String(formData.get("endDate") ?? "");
+  const endDate = endDateRaw ? new Date(endDateRaw) : null;
+
+  await prisma.subscription.update({
+    where: { id: subscriptionId },
+    data: { plan, baseClasses, carryForwardClasses, startDate, endDate },
+  });
+
+  revalidatePath(`/admin/students/${studentId}`);
+  revalidatePath(`/parent/students/${studentId}`);
+}
+
 export async function cancelSubscription(subscriptionId: string, studentId: string) {
   await requireRole("ADMIN");
 
