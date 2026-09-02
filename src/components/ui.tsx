@@ -52,8 +52,9 @@ export function Button({
   variant?: "primary" | "secondary" | "danger" | "ghost";
   type?: "button" | "submit" | "reset";
   className?: string;
-  onClick?: () => void;
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
+  formAction?: string | ((formData: FormData) => void | Promise<void>);
 }) {
   const variants: Record<string, string> = {
     primary: "bg-vinyl-coral text-white hover:bg-vinyl-coral-dark",

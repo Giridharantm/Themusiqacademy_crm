@@ -11,9 +11,11 @@ import {
   updateStudentStatus,
 } from "@/lib/actions/student-actions";
 import { createOrRenewSubscription, addBonusClasses, cancelSubscription } from "@/lib/actions/subscription-actions";
+import { markAttendanceOnDateAsAdmin, removeAttendanceOnDateAsAdmin } from "@/lib/actions/attendance-actions";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Input, Select, Button, EmptyState } from "@/components/ui";
 import { SubscriptionProgress } from "@/components/subscription-progress";
 import { SubscriptionFormFields } from "@/components/subscription-form-fields";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { EnrollBatchFields } from "@/components/enroll-batch-fields";
 import { subscriptionTotals, countUsedClasses, attendanceForSubscription } from "@/lib/subscription";
 import { DAY_LABELS, formatTimeLabel } from "@/lib/schedule";
@@ -209,6 +211,18 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                         </p>
                       )}
 
+                      <form className="flex items-end gap-2 mb-2">
+                        <div className="flex-1 max-w-[10rem]">
+                          <Input label="Mark attendance for a date" name="date" type="date" defaultValue={format(new Date(), "yyyy-MM-dd")} required />
+                        </div>
+                        <Button type="submit" variant="secondary" formAction={markAttendanceOnDateAsAdmin.bind(null, student.id, courseId)}>
+                          Mark present
+                        </Button>
+                        <Button type="submit" variant="ghost" formAction={removeAttendanceOnDateAsAdmin.bind(null, student.id, courseId)}>
+                          Remove
+                        </Button>
+                      </form>
+
                       {pooledAttendance.length > 0 && (
                         <details className="mb-2">
                           <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600">
@@ -256,7 +270,9 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                               </form>
                             </details>
                             <form action={cancelSubscription.bind(null, activeSubscription.id, student.id)}>
-                              <Button type="submit" variant="ghost">Cancel subscription</Button>
+                              <ConfirmSubmitButton confirmMessage="Cancel this subscription? This freezes it immediately at today's usage and can't be undone.">
+                                Cancel subscription
+                              </ConfirmSubmitButton>
                             </form>
                           </>
                         )}
