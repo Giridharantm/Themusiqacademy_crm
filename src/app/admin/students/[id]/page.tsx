@@ -230,9 +230,15 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                           </summary>
                           <ul className="mt-2 divide-y divide-slate-100 max-h-56 overflow-y-auto">
                             {pooledAttendance.map((a) => (
-                              <li key={a.id} className="py-1.5 flex items-center justify-between text-sm">
+                              <li key={a.id} className="py-1.5 flex items-center justify-between text-sm gap-2">
                                 <span className="text-slate-600">{format(a.date, "d MMM yyyy")}</span>
-                                <Badge color={a.status === "PRESENT" ? "green" : "red"}>{a.status}</Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge color={a.status === "PRESENT" ? "green" : "red"}>{a.status}</Badge>
+                                  <form action={removeAttendanceOnDateAsAdmin.bind(null, student.id, courseId)}>
+                                    <input type="hidden" name="date" value={format(a.date, "yyyy-MM-dd")} />
+                                    <button type="submit" className="text-xs text-slate-400 hover:text-red-600">Remove</button>
+                                  </form>
+                                </div>
                               </li>
                             ))}
                           </ul>
