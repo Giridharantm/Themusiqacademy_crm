@@ -25,6 +25,7 @@ export function EditSubscriptionFields({
     carryForwardClasses: number;
     startDate: Date;
     endDate: Date | null;
+    classesUsedAtMigration: number;
   };
 }) {
   const [plan, setPlan] = useState<SubscriptionPlan>(subscription.plan);
@@ -64,6 +65,14 @@ export function EditSubscriptionFields({
         type="number"
         min="0"
         defaultValue={subscription.carryForwardClasses}
+      />
+      <Input
+        label="Classes used before this app (migration offset)"
+        name="classesUsedAtMigration"
+        type="number"
+        min="0"
+        defaultValue={subscription.classesUsedAtMigration}
+        hint="Covers classes attended before per-date attendance tracking started here. Correct this directly if the migrated number turns out to be wrong — the classes-recorded list below is a separate, real attendance history and isn't affected by this."
       />
     </div>
   );

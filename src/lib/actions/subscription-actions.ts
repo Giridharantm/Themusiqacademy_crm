@@ -114,9 +114,11 @@ export async function updateSubscription(subscriptionId: string, studentId: stri
   const endDateRaw = String(formData.get("endDate") ?? "");
   const endDate = endDateRaw ? new Date(endDateRaw) : null;
 
+  const classesUsedAtMigration = Math.max(0, Number(formData.get("classesUsedAtMigration") ?? 0));
+
   await prisma.subscription.update({
     where: { id: subscriptionId },
-    data: { plan, baseClasses, carryForwardClasses, startDate, endDate },
+    data: { plan, baseClasses, carryForwardClasses, startDate, endDate, classesUsedAtMigration },
   });
 
   revalidatePath(`/admin/students/${studentId}`);
