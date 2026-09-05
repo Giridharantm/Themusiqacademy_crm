@@ -10,12 +10,13 @@ import {
   deleteEnrollment,
   updateStudentStatus,
 } from "@/lib/actions/student-actions";
-import { createOrRenewSubscription, updateSubscription, addBonusClasses, cancelSubscription } from "@/lib/actions/subscription-actions";
+import { createOrRenewSubscription, updateSubscription, addBonusClasses, cancelSubscription, addPastSubscription } from "@/lib/actions/subscription-actions";
 import { markAttendanceOnDateAsAdmin, removeAttendanceOnDateAsAdmin } from "@/lib/actions/attendance-actions";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Input, Select, Button, EmptyState } from "@/components/ui";
 import { SubscriptionProgress } from "@/components/subscription-progress";
 import { SubscriptionFormFields } from "@/components/subscription-form-fields";
 import { EditSubscriptionFields } from "@/components/edit-subscription-fields";
+import { PastSubscriptionFields } from "@/components/past-subscription-fields";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { EnrollBatchFields } from "@/components/enroll-batch-fields";
 import { subscriptionTotals, countUsedClasses, attendanceForSubscription } from "@/lib/subscription";
@@ -260,6 +261,17 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                           </ul>
                         </details>
                       )}
+
+                      <details className="mb-2" key={`past-${pastSubscriptions.length}`}>
+                        <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none">+ Add a past subscription</summary>
+                        <p className="text-xs text-slate-400 mt-1 mb-2 max-w-sm">
+                          For a cycle that already ended before it was entered here — logs its own plan, dates, and completed count without touching the current subscription.
+                        </p>
+                        <form action={addPastSubscription.bind(null, student.id, courseId)} className="space-y-3 max-w-sm">
+                          <PastSubscriptionFields />
+                          <Button type="submit" variant="secondary" className="w-full">Add past subscription</Button>
+                        </form>
+                      </details>
 
                       <div className="flex flex-wrap items-center gap-2 mb-3">
                         {activeSubscription && (

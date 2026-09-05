@@ -130,6 +130,48 @@ export async function updateSubscription(subscriptionId: string, studentId: stri
   revalidatePath(`/parent/students/${studentId}`);
 }
 
+// Logs a subscription cycle that already ran its course before this app (or
+// this admin) was tracking it — a distinct historical record with its own
+// plan and dates, shown in "past subscriptions" alongside real closed
+// cycles. Unlike classesUsedAtMigration (a plain offset folded into the
+// *current* subscription), this creates its own row — for a student whose
+// prior package history is worth keeping visible on its own, not just as a
+// number. Never touches whatever subscription is currently active.
+export async function addPastSubscription(studentId: string, courseId: string, formData: FormData) {
+  const user = await requireRole("ADMIN");
+
+  const plan = String(formData.get("plan") ?? "ONE_MONTH") as SubscriptionPlan;
+  const baseClasses = plan === "CUSTOM" ? Number(formData.get("baseClasses") ?? 0) : PLAN_CLASSES[plan];
+  if (!baseClasses || baseClasses <= 0) throw new Error("A valid number of classes is required");
+
+  const startDateRaw = String(formData.get("startDate") ?? "");
+  if (!startDateRaw) throw new Error("A start date is required");
+  const startDate = new Date(startDateRaw);
+  startDate.setHours(0, 0, 0, 0);
+
+  const endDateRaw = String(formData.get("endDate") ?? "");
+  const endDate = endDateRaw ? new Date(endDateRaw) : null;
+
+  const status = String(formData.get("status") ?? "EXPIRED") === "CANCELLED" ? "CANCELLED" : "EXPIRED";
+  const classesUsedAtClose = Math.max(0, Number(formData.get("classesUsedAtClose") ?? 0));
+
+  const bonusClasses = Number(formData.get("bonusClasses") ?? 0);
+  const bonusReason = String(formData.get("bonusReason") ?? "").trim() || null;
+
+  const subscription = await prisma.subscription.create({
+    data: { studentId, courseId, plan, baseClasses, startDate, endDate, status, classesUsedAtClose },
+  });
+
+  if (bonusClasses > 0) {
+    await prisma.bonusGrant.create({
+      data: { subscriptionId: subscription.id, classes: bonusClasses, reason: bonusReason, grantedById: user.id },
+    });
+  }
+
+  revalidatePath(`/admin/students/${studentId}`);
+  revalidatePath(`/parent/students/${studentId}`);
+}
+
 export async function cancelSubscription(subscriptionId: string, studentId: string) {
   await requireRole("ADMIN");
 
