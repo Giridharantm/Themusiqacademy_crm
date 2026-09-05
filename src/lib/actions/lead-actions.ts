@@ -114,22 +114,26 @@ export async function convertLeadToStudent(leadId: string, formData: FormData) {
 
   if (!name || !phone) throw new Error("Name and phone are required");
 
-  await prisma.lead.update({
-    where: { id: leadId },
-    data: { name, phone, email, interestedCourseId, status: "CONVERTED" },
-  });
+  // One transaction: if student creation fails (e.g. a code collision), the
+  // lead must not be left stuck marked CONVERTED with no student attached.
+  const student = await prisma.$transaction(async (tx) => {
+    await tx.lead.update({
+      where: { id: leadId },
+      data: { name, phone, email, interestedCourseId, status: "CONVERTED" },
+    });
 
-  const student = await prisma.student.create({
-    data: {
-      studentCode: await nextStudentCode(),
-      name,
-      dob: dobRaw ? new Date(dobRaw) : null,
-      gender,
-      phone,
-      email,
-      address,
-      leadId: lead.id,
-    },
+    return tx.student.create({
+      data: {
+        studentCode: await nextStudentCode(),
+        name,
+        dob: dobRaw ? new Date(dobRaw) : null,
+        gender,
+        phone,
+        email,
+        address,
+        leadId: lead.id,
+      },
+    });
   });
 
   revalidatePath("/admin/leads");

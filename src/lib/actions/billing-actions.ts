@@ -10,9 +10,15 @@ import { splitGst } from "@/lib/billing";
 const ALLOWED_ITEM_AMOUNTS = new Set<number>(Object.values(PLAN_INVOICE_AMOUNTS));
 const ALLOWED_DISCOUNTS = new Set<number>([0, ...DISCOUNT_STEPS]);
 
+// Derived from the highest existing number, not a row count — see the same
+// fix (and the reasoning) in nextStudentCode().
 async function nextInvoiceNumber() {
-  const count = await prisma.invoice.count();
-  return `INV-${String(count + 1).padStart(4, "0")}`;
+  const [row] = await prisma.$queryRaw<{ max: number | null }[]>`
+    SELECT MAX(CAST(SUBSTRING("invoiceNumber" FROM 5) AS INTEGER)) AS max
+    FROM "Invoice"
+    WHERE "invoiceNumber" ~ '^INV-[0-9]+$'
+  `;
+  return `INV-${String((row?.max ?? 0) + 1).padStart(4, "0")}`;
 }
 
 export async function createInvoice(formData: FormData) {
