@@ -62,8 +62,13 @@ export async function createOrRenewSubscription(studentId: string, courseId: str
   const bonusClasses = Number(formData.get("bonusClasses") ?? 0);
   const bonusReason = String(formData.get("bonusReason") ?? "").trim() || null;
 
+  // Only ever submitted on a brand-new subscription (the field is hidden on
+  // renewals) — lets a student who was already enrolled/attending before
+  // this package existed here start with their real prior usage counted.
+  const classesUsedAtMigration = Math.max(0, Number(formData.get("classesUsedAtMigration") ?? 0));
+
   const subscription = await prisma.subscription.create({
-    data: { studentId, courseId, plan, baseClasses, carryForwardClasses, startDate, endDate, status: "ACTIVE" },
+    data: { studentId, courseId, plan, baseClasses, carryForwardClasses, startDate, endDate, status: "ACTIVE", classesUsedAtMigration },
   });
 
   if (bonusClasses > 0) {

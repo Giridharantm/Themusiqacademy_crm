@@ -121,8 +121,10 @@ export async function enrollInBatch(studentId: string, formData: FormData) {
     const endDateRaw = String(formData.get(`${prefix}endDate`) ?? "");
     const endDate = endDateRaw ? new Date(endDateRaw) : plan === "CUSTOM" ? null : addDays(startDate, PLAN_DAYS[plan]);
 
+    const classesUsedAtMigration = Math.max(0, Number(formData.get(`${prefix}classesUsedAtMigration`) ?? 0));
+
     const subscription = await prisma.subscription.create({
-      data: { studentId, courseId, plan, baseClasses, startDate, endDate, status: "ACTIVE" },
+      data: { studentId, courseId, plan, baseClasses, startDate, endDate, status: "ACTIVE", classesUsedAtMigration },
     });
 
     const bonusClasses = Number(formData.get(`${prefix}bonusClasses`) ?? 0);
