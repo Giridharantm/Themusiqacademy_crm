@@ -91,6 +91,7 @@ model User {
   // Admin/staff relations
   leadsAssigned  Lead[]       @relation("AssignedStaff")
   followUpsMade  FollowUp[]   @relation("FollowUpCreatedBy")
+  studentFollowUpsMade StudentFollowUp[] @relation("StudentFollowUpCreatedBy")
   bonusGrantsGiven BonusGrant[] @relation("BonusGrantedBy")
 
   // Parent relations
@@ -126,6 +127,21 @@ model FollowUp {
   createdById     String?
   createdBy       User?    @relation("FollowUpCreatedBy", fields: [createdById], references: [id])
   createdAt       DateTime @default(now())
+}
+
+// A reminder to call an existing student back on a given date — e.g. a
+// subscription lapsed or is about to, but the student asked to be reached
+// again later (out of town, thinking it over) rather than renewed now.
+model StudentFollowUp {
+  id           String   @id @default(cuid())
+  studentId    String
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  note         String
+  followUpDate DateTime
+  done         Boolean  @default(false)
+  createdById  String?
+  createdBy    User?    @relation("StudentFollowUpCreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
 }
 
 model Course {
@@ -179,6 +195,7 @@ model Student {
   invoices      Invoice[]
   subscriptions Subscription[]
   attendance    Attendance[]
+  followUps     StudentFollowUp[]
 }
 
 model StudentGuardian {

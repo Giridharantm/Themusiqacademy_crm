@@ -189,3 +189,29 @@ export async function updateEnrollmentStatus(enrollmentId: string, studentId: st
   });
   revalidatePath(`/admin/students/${studentId}`);
 }
+
+// A reminder to call this student back on a given date — e.g. their
+// subscription lapsed or is ending, but they're away or asked to be
+// contacted later rather than renewing right now.
+export async function addStudentFollowUp(studentId: string, formData: FormData) {
+  const user = await requireRole("ADMIN");
+
+  const note = String(formData.get("note") ?? "").trim();
+  const followUpDateRaw = String(formData.get("followUpDate") ?? "");
+  if (!note) throw new Error("Note is required");
+  if (!followUpDateRaw) throw new Error("A call-back date is required");
+
+  await prisma.studentFollowUp.create({
+    data: { studentId, note, followUpDate: new Date(followUpDateRaw), createdById: user.id },
+  });
+
+  revalidatePath(`/admin/students/${studentId}`);
+  revalidatePath("/admin");
+}
+
+export async function markStudentFollowUpDone(followUpId: string, studentId: string) {
+  await requireRole("ADMIN");
+  await prisma.studentFollowUp.update({ where: { id: followUpId }, data: { done: true } });
+  revalidatePath(`/admin/students/${studentId}`);
+  revalidatePath("/admin");
+}

@@ -9,10 +9,12 @@ import {
   updateEnrollmentBatch,
   deleteEnrollment,
   updateStudentStatus,
+  addStudentFollowUp,
+  markStudentFollowUpDone,
 } from "@/lib/actions/student-actions";
 import { createOrRenewSubscription, updateSubscription, addBonusClasses, cancelSubscription, addPastSubscription } from "@/lib/actions/subscription-actions";
 import { markAttendanceOnDateAsAdmin, removeAttendanceOnDateAsAdmin } from "@/lib/actions/attendance-actions";
-import { Card, CardBody, CardHeader, PageHeader, Badge, Input, Select, Button, EmptyState } from "@/components/ui";
+import { Card, CardBody, CardHeader, PageHeader, Badge, Input, Select, Textarea, Button, EmptyState } from "@/components/ui";
 import { SubscriptionProgress } from "@/components/subscription-progress";
 import { SubscriptionFormFields } from "@/components/subscription-form-fields";
 import { EditSubscriptionFields } from "@/components/edit-subscription-fields";
@@ -53,10 +55,15 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
       },
       invoices: { orderBy: { issueDate: "desc" }, include: { payments: true } },
       feedback: { orderBy: { date: "desc" }, take: 10, include: { teacher: true } },
+      followUps: { orderBy: { followUpDate: "asc" } },
     },
   });
 
   if (!student) notFound();
+
+  const todayDateOnly = new Date();
+  todayDateOnly.setHours(0, 0, 0, 0);
+  const pendingFollowUps = student.followUps.filter((f) => !f.done);
 
   const batches = await prisma.batch.findMany({ include: { course: true }, orderBy: { name: "asc" } });
 
@@ -380,6 +387,44 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         </div>
 
         <div className="space-y-6">
+          <Card>
+            <CardHeader title="Follow-ups" subtitle="For a student to call back later instead of renewing now" />
+            <CardBody>
+              <form action={addStudentFollowUp.bind(null, student.id)} className="space-y-3 mb-5 pb-5 border-b border-slate-100">
+                <Textarea label="Note" name="note" placeholder="e.g. Out of town till November, call to renew Guitar then" required />
+                <div className="flex items-end gap-3">
+                  <div className="flex-1">
+                    <Input label="Call back on" name="followUpDate" type="date" required />
+                  </div>
+                  <Button type="submit">Add</Button>
+                </div>
+              </form>
+
+              {pendingFollowUps.length === 0 ? (
+                <EmptyState text="No pending follow-ups" />
+              ) : (
+                <ul className="space-y-3">
+                  {pendingFollowUps.map((f) => {
+                    const overdue = f.followUpDate < todayDateOnly;
+                    return (
+                      <li key={f.id} className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm text-slate-900">{f.note}</p>
+                          <p className={`text-xs mt-0.5 ${overdue ? "text-red-600" : "text-slate-400"}`}>
+                            Call back {format(f.followUpDate, "d MMM yyyy")}{overdue ? " · overdue" : ""}
+                          </p>
+                        </div>
+                        <form action={markStudentFollowUpDone.bind(null, f.id, student.id)}>
+                          <Button type="submit" variant="ghost">Done</Button>
+                        </form>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </CardBody>
+          </Card>
+
           <Card>
             <CardHeader title="Guardians, parents & self" subtitle="Adult students can link their own account too" />
             {student.guardians.length === 0 ? (

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { Card, CardBody, CardHeader, PageHeader, StatCard, EmptyState, Badge } from "@/components/ui";
+import { Card, CardBody, CardHeader, PageHeader, StatCard, EmptyState, Badge, Button } from "@/components/ui";
+import { markStudentFollowUpDone } from "@/lib/actions/student-actions";
 import { format } from "date-fns";
 
 export default async function AdminDashboard() {
@@ -10,13 +11,22 @@ export default async function AdminDashboard() {
   const todayDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayCode = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][now.getDay()];
 
-  const [leadCounts, activeStudents, renewalsThisMonth, upcomingFollowUps, todaysBatches, invoices] = await Promise.all([
+  const [leadCounts, activeStudents, renewalsThisMonth, upcomingFollowUps, studentCallbacksDue, todaysBatches, invoices] = await Promise.all([
     prisma.lead.groupBy({ by: ["status"], _count: true }),
     prisma.student.count({ where: { status: "ACTIVE" } }),
     prisma.subscription.count({ where: { status: "ACTIVE", endDate: { gte: monthStart, lt: monthEnd } } }),
     prisma.followUp.findMany({
       where: { done: false, followUpDate: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
       include: { lead: true },
+      orderBy: { followUpDate: "asc" },
+      take: 5,
+    }),
+    // No lower bound on the date: an overdue callback (missed while it was
+    // "upcoming") is the most urgent thing to surface here, not something
+    // that should quietly fall off the list once its date has passed.
+    prisma.studentFollowUp.findMany({
+      where: { done: false },
+      include: { student: true },
       orderBy: { followUpDate: "asc" },
       take: 5,
     }),
@@ -148,6 +158,41 @@ export default async function AdminDashboard() {
               })}
             </ul>
           )}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <Card>
+          <CardHeader title="Student callbacks due" subtitle="Students to call back about renewing, not currently on a subscription follow-up" />
+          <CardBody>
+            {studentCallbacksDue.length === 0 ? (
+              <EmptyState text="No callbacks due" />
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {studentCallbacksDue.map((f) => {
+                  const overdue = f.followUpDate < todayDateOnly;
+                  return (
+                    <li key={f.id} className="py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <Link href={`/admin/students/${f.studentId}`} className="text-sm font-medium text-slate-900 hover:text-indigo-600">
+                          {f.student.name}
+                        </Link>
+                        <p className="text-xs text-slate-500">{f.note}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-xs ${overdue ? "text-red-600" : "text-slate-400"}`}>
+                          {format(f.followUpDate, "d MMM")}{overdue ? " · overdue" : ""}
+                        </span>
+                        <form action={markStudentFollowUpDone.bind(null, f.id, f.studentId)}>
+                          <Button type="submit" variant="ghost">Done</Button>
+                        </form>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardBody>
         </Card>
       </div>
     </div>
