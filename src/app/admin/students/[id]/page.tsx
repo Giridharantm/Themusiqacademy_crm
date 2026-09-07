@@ -12,7 +12,15 @@ import {
   addStudentFollowUp,
   markStudentFollowUpDone,
 } from "@/lib/actions/student-actions";
-import { createOrRenewSubscription, updateSubscription, addBonusClasses, cancelSubscription, addPastSubscription } from "@/lib/actions/subscription-actions";
+import {
+  createOrRenewSubscription,
+  updateSubscription,
+  addBonusClasses,
+  cancelSubscription,
+  addPastSubscription,
+  updateClosedSubscription,
+  deleteSubscription,
+} from "@/lib/actions/subscription-actions";
 import { markAttendanceOnDateAsAdmin, removeAttendanceOnDateAsAdmin } from "@/lib/actions/attendance-actions";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Input, Select, Textarea, Button, EmptyState } from "@/components/ui";
 import { SubscriptionProgress } from "@/components/subscription-progress";
@@ -263,6 +271,29 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                             {pastSubscriptions.map((s) => (
                               <li key={s.id} className="bg-slate-50 rounded-md p-3">
                                 <SubscriptionProgress subscription={s} attendance={pooledAttendance} />
+                                <div className="flex items-center gap-3 mt-2">
+                                  <details className="text-xs">
+                                    <summary className="text-indigo-600 hover:underline cursor-pointer list-none">Edit</summary>
+                                    <form action={updateClosedSubscription.bind(null, s.id, student.id)} className="mt-2 max-w-sm">
+                                      <PastSubscriptionFields
+                                        initial={{
+                                          plan: s.plan,
+                                          baseClasses: s.baseClasses,
+                                          startDate: format(s.startDate, "yyyy-MM-dd"),
+                                          endDate: s.endDate ? format(s.endDate, "yyyy-MM-dd") : null,
+                                          classesUsedAtClose: s.classesUsedAtClose ?? 0,
+                                          status: s.status === "CANCELLED" ? "CANCELLED" : "EXPIRED",
+                                        }}
+                                      />
+                                      <Button type="submit" variant="secondary" className="w-full mt-3">Save changes</Button>
+                                    </form>
+                                  </details>
+                                  <form action={deleteSubscription.bind(null, s.id, student.id)}>
+                                    <ConfirmSubmitButton confirmMessage="Delete this past subscription record? This cannot be undone.">
+                                      Delete
+                                    </ConfirmSubmitButton>
+                                  </form>
+                                </div>
                               </li>
                             ))}
                           </ul>

@@ -172,6 +172,57 @@ export async function addPastSubscription(studentId: string, courseId: string, f
   revalidatePath(`/parent/students/${studentId}`);
 }
 
+// Corrects a closed (non-ACTIVE) subscription — a typo in a past-subscription
+// entry, or a legitimately-closed renewal that needs fixing. Refuses to touch
+// the active subscription: use updateSubscription for that, since this skips
+// carry-forward/migration-offset handling that only makes sense for one.
+export async function updateClosedSubscription(subscriptionId: string, studentId: string, formData: FormData) {
+  await requireRole("ADMIN");
+
+  const existing = await prisma.subscription.findUnique({ where: { id: subscriptionId } });
+  if (!existing) throw new Error("Subscription not found");
+  if (existing.status === "ACTIVE") throw new Error('Use "Edit subscription" for the active subscription');
+
+  const plan = String(formData.get("plan") ?? "ONE_MONTH") as SubscriptionPlan;
+  const baseClasses = plan === "CUSTOM" ? Number(formData.get("baseClasses") ?? 0) : PLAN_CLASSES[plan];
+  if (!baseClasses || baseClasses <= 0) throw new Error("A valid number of classes is required");
+
+  const startDateRaw = String(formData.get("startDate") ?? "");
+  if (!startDateRaw) throw new Error("A start date is required");
+  const startDate = new Date(startDateRaw);
+  startDate.setHours(0, 0, 0, 0);
+
+  const endDateRaw = String(formData.get("endDate") ?? "");
+  const endDate = endDateRaw ? new Date(endDateRaw) : null;
+
+  const status = String(formData.get("status") ?? "EXPIRED") === "CANCELLED" ? "CANCELLED" : "EXPIRED";
+  const classesUsedAtClose = Math.max(0, Number(formData.get("classesUsedAtClose") ?? 0));
+
+  await prisma.subscription.update({
+    where: { id: subscriptionId },
+    data: { plan, baseClasses, startDate, endDate, status, classesUsedAtClose },
+  });
+
+  revalidatePath(`/admin/students/${studentId}`);
+  revalidatePath(`/parent/students/${studentId}`);
+}
+
+// Removes a closed subscription record entirely — for a past-subscription
+// entry added by mistake, or duplicated. Refuses the active subscription:
+// that should be cancelled (preserving its history), never deleted outright.
+export async function deleteSubscription(subscriptionId: string, studentId: string) {
+  await requireRole("ADMIN");
+
+  const existing = await prisma.subscription.findUnique({ where: { id: subscriptionId } });
+  if (!existing) return;
+  if (existing.status === "ACTIVE") throw new Error("Cancel the active subscription instead of deleting it");
+
+  await prisma.subscription.delete({ where: { id: subscriptionId } });
+
+  revalidatePath(`/admin/students/${studentId}`);
+  revalidatePath(`/parent/students/${studentId}`);
+}
+
 export async function cancelSubscription(subscriptionId: string, studentId: string) {
   await requireRole("ADMIN");
 
