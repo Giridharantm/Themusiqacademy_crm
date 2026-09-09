@@ -98,6 +98,10 @@ export async function enrollInBatch(studentId: string, formData: FormData) {
   const batches = await prisma.batch.findMany({ where: { id: { in: batchIds } } });
   if (batches.length !== batchIds.length) throw new Error("One or more batches were not found");
 
+  // Re-enrolling is exactly the "they're back" signal — an inactive student
+  // shouldn't need a separate manual "Mark Active" click on top of this.
+  await prisma.student.update({ where: { id: studentId }, data: { status: "ACTIVE" } });
+
   for (const batch of batches) {
     await prisma.enrollment.create({
       data: { studentId, batchId: batch.id, startDate, status: "ACTIVE" },

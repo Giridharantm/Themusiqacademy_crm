@@ -77,6 +77,10 @@ export async function createOrRenewSubscription(studentId: string, courseId: str
     });
   }
 
+  // Renewing is exactly the "they're back" signal — an inactive student
+  // shouldn't need a separate manual "Mark Active" click on top of this.
+  await prisma.student.update({ where: { id: studentId }, data: { status: "ACTIVE" } });
+
   revalidatePath(`/admin/students/${studentId}`);
   revalidatePath(`/parent/students/${studentId}`);
   revalidatePath("/admin/attendance");
