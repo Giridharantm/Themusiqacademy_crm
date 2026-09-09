@@ -66,7 +66,19 @@ export async function updateLead(leadId: string, formData: FormData) {
     data: { name, phone, email, source, interestedCourseId, notes },
   });
 
+  // Once converted, the Lead and Student are separate records (the student
+  // may go on to have its own corrections) — but a lead's own contact
+  // details are still the same person, so keep them in sync rather than
+  // leaving the student silently stuck with whatever was true at conversion.
+  const linkedStudent = await prisma.student.findUnique({ where: { leadId } });
+  if (linkedStudent) {
+    await prisma.student.update({ where: { id: linkedStudent.id }, data: { name, phone, email } });
+    revalidatePath(`/admin/students/${linkedStudent.id}`);
+    revalidatePath(`/parent/students/${linkedStudent.id}`);
+  }
+
   revalidatePath("/admin/leads");
+  revalidatePath("/admin/students");
   redirect("/admin/leads");
 }
 
