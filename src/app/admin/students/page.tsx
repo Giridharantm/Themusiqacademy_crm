@@ -19,6 +19,13 @@ export default async function StudentsPage({
   const q = normalizeSearchQuery(rawQ);
   const phoneDigits = q ? phoneSearchDigits(q) : undefined;
 
+  // No status in the URL at all (a fresh visit) defaults to Active only —
+  // inactive students shouldn't clutter the default view. "ALL" is the
+  // filter's explicit "show inactive too" choice, distinct from that
+  // default; it must survive round-tripping through the search box's hidden
+  // fields, which is why it isn't just an empty string (those get dropped).
+  const effectiveStatus = status === undefined ? "ACTIVE" : status === "ALL" ? undefined : status;
+
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -26,7 +33,7 @@ export default async function StudentsPage({
   const [studentsRaw, courses] = await Promise.all([
     prisma.student.findMany({
       where: {
-        status: status || undefined,
+        status: effectiveStatus,
         ...(q
           ? {
               OR: [
@@ -107,7 +114,7 @@ export default async function StudentsPage({
     <div>
       <PageHeader
         title="Students"
-        subtitle="All enrolled students at the academy"
+        subtitle="Active students by default — use the status filter to include inactive ones"
         action={<SearchBox placeholder="Search by name, ID, phone..." defaultValue={q} extraParams={{ status, courseId, renewal, sort }} />}
       />
 
@@ -121,7 +128,7 @@ export default async function StudentsPage({
                   {q && <input type="hidden" name="q" value={q} />}
                   <StudentFilterFields
                     courseOptions={courseOptions}
-                    selectedStatus={status}
+                    selectedStatus={status ?? "ACTIVE"}
                     selectedCourseId={courseId}
                     selectedRenewal={renewal}
                     selectedSort={sort}

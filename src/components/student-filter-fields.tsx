@@ -7,20 +7,22 @@ function AutoSubmitSelect({
   value,
   options,
   placeholder,
+  placeholderValue = "",
 }: {
   name: string;
   value?: string;
   options: Option[];
   placeholder: string;
+  placeholderValue?: string;
 }) {
   return (
     <select
       name={name}
-      defaultValue={value ?? ""}
+      defaultValue={value ?? placeholderValue}
       onChange={(e) => e.currentTarget.form?.requestSubmit()}
       className="flex-1 min-w-[10rem] rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
     >
-      <option value="">{placeholder}</option>
+      <option value={placeholderValue}>{placeholder}</option>
       {options.map((o) => (
         <option key={o.value} value={o.value}>{o.label}</option>
       ))}
@@ -63,7 +65,8 @@ export function StudentFilterFields({
         name="status"
         value={selectedStatus}
         options={[{ value: "ACTIVE", label: "Active" }, { value: "INACTIVE", label: "Inactive" }]}
-        placeholder="All statuses"
+        placeholder="All statuses (incl. inactive)"
+        placeholderValue="ALL"
       />
       <AutoSubmitSelect name="courseId" value={selectedCourseId} options={courseOptions} placeholder="All instruments" />
       <AutoSubmitSelect name="renewal" value={selectedRenewal} options={RENEWAL_OPTIONS} placeholder="All renewal states" />
