@@ -15,7 +15,7 @@ export default async function TeacherBatchPage({ params }: { params: Promise<{ i
     where: { id },
     include: {
       course: true,
-      enrollments: { where: { status: "ACTIVE" }, include: { student: true }, orderBy: { createdAt: "asc" } },
+      enrollments: { where: { status: "ACTIVE", student: { status: "ACTIVE" } }, include: { student: true }, orderBy: { createdAt: "asc" } },
       homework: { orderBy: { createdAt: "desc" }, take: 5 },
     },
   });

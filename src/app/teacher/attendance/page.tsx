@@ -48,7 +48,7 @@ export default async function TeacherAttendancePage({
       // default into a Wednesday roster just because they take the same
       // instrument with this teacher on other days.
       prisma.enrollment.findMany({
-        where: { status: "ACTIVE", batch: { courseId: selectedCourse.id, teacherId: user.id, dayOfWeek: selectedDayCode } },
+        where: { status: "ACTIVE", student: { status: "ACTIVE" }, batch: { courseId: selectedCourse.id, teacherId: user.id, dayOfWeek: selectedDayCode } },
         include: { student: true, batch: true },
         orderBy: [{ batch: { startTime: "asc" } }, { student: { name: "asc" } }],
       }),

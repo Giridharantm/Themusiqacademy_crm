@@ -15,7 +15,7 @@ export default async function BatchesPage({
 
   const [allBatchesRaw, courses, teachers] = await Promise.all([
     prisma.batch.findMany({
-      include: { course: true, teacher: true, _count: { select: { enrollments: true } } },
+      include: { course: true, teacher: true, _count: { select: { enrollments: { where: { student: { status: "ACTIVE" } } } } } },
     }),
     prisma.course.findMany({ orderBy: { name: "asc" } }),
     prisma.user.findMany({ where: { role: "TEACHER", status: "ACTIVE" }, orderBy: { name: "asc" } }),

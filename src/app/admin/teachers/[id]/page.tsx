@@ -17,7 +17,7 @@ export default async function TeacherDetailPage({ params }: { params: Promise<{ 
   const teacher = await prisma.user.findUnique({
     where: { id, role: "TEACHER" },
     include: {
-      batchesTaught: { include: { course: true, _count: { select: { enrollments: true } } }, orderBy: { name: "asc" } },
+      batchesTaught: { include: { course: true, _count: { select: { enrollments: { where: { student: { status: "ACTIVE" } } } } } }, orderBy: { name: "asc" } },
       _count: { select: { homeworkGiven: true, feedbackGiven: true, attendanceMarked: true } },
     },
   });

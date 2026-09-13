@@ -59,7 +59,7 @@ export default async function AttendancePage({
       // the week — a Tue/Thu Guitar student shouldn't default into a
       // Wednesday Guitar roster just because they take the same instrument.
       prisma.enrollment.findMany({
-        where: { status: "ACTIVE", batch: { courseId: selectedCourse.id, dayOfWeek: selectedDayCode } },
+        where: { status: "ACTIVE", student: { status: "ACTIVE" }, batch: { courseId: selectedCourse.id, dayOfWeek: selectedDayCode } },
         include: { student: true, batch: { include: { teacher: true } } },
         orderBy: [{ batch: { startTime: "asc" } }, { student: { name: "asc" } }],
       }),

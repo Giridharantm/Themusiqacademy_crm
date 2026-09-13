@@ -12,7 +12,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
     include: {
       course: true,
       teacher: true,
-      enrollments: { include: { student: true }, orderBy: { createdAt: "asc" } },
+      enrollments: { where: { student: { status: "ACTIVE" } }, include: { student: true }, orderBy: { createdAt: "asc" } },
       homework: { orderBy: { createdAt: "desc" }, take: 5 },
     },
   });
