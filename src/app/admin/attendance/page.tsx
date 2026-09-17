@@ -71,7 +71,10 @@ export default async function AttendancePage({
         include: { student: true },
         orderBy: { student: { name: "asc" } },
       }),
-      prisma.attendance.findMany({ where: { courseId: selectedCourse.id, date: parseDateOnly(selectedDate) }, include: { student: true } }),
+      prisma.attendance.findMany({
+        where: { courseId: selectedCourse.id, date: parseDateOnly(selectedDate), student: { status: "ACTIVE" } },
+        include: { student: true },
+      }),
     ]);
 
     const markedIds = new Set(existingAttendance.map((a) => a.studentId));

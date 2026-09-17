@@ -52,11 +52,11 @@ export default async function AdminDashboard() {
   const courseIdsToday = Array.from(new Set(todaysBatches.map((b) => b.courseId)));
   const [todaysEnrollments, todaysAttendance] = await Promise.all([
     prisma.enrollment.findMany({
-      where: { status: "ACTIVE", batch: { dayOfWeek: todayCode, courseId: { in: courseIdsToday } } },
+      where: { status: "ACTIVE", student: { status: "ACTIVE" }, batch: { dayOfWeek: todayCode, courseId: { in: courseIdsToday } } },
       select: { studentId: true, batch: { select: { courseId: true } } },
     }),
     prisma.attendance.findMany({
-      where: { date: todayDateOnly, courseId: { in: courseIdsToday } },
+      where: { date: todayDateOnly, courseId: { in: courseIdsToday }, student: { status: "ACTIVE" } },
       select: { studentId: true, courseId: true },
     }),
   ]);
