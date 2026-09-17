@@ -77,13 +77,19 @@ export async function updateBatch(batchId: string, formData: FormData) {
 export async function deleteBatch(batchId: string) {
   await requireRole("ADMIN");
 
-  const [enrollments, homework] = await Promise.all([
-    prisma.enrollment.count({ where: { batchId } }),
+  // Only an ACTIVE student's enrollment should block deletion — an inactive
+  // student's leftover enrollment is already invisible in every roster (see
+  // student.status filtering elsewhere), so it shouldn't block an action
+  // that looks perfectly safe from the admin's point of view. There's no
+  // batch left for them to be "kept re-enrollable" into once this one is
+  // gone, so those rows are cleaned up below rather than left dangling.
+  const [activeEnrollments, homework] = await Promise.all([
+    prisma.enrollment.count({ where: { batchId, student: { status: "ACTIVE" } } }),
     prisma.homework.count({ where: { batchId } }),
   ]);
 
   const blockers = [
-    enrollments > 0 && `${enrollments} enrolled student${enrollments !== 1 ? "s" : ""}`,
+    activeEnrollments > 0 && `${activeEnrollments} enrolled student${activeEnrollments !== 1 ? "s" : ""}`,
     homework > 0 && `${homework} homework record${homework !== 1 ? "s" : ""}`,
   ].filter(Boolean);
 
@@ -91,6 +97,7 @@ export async function deleteBatch(batchId: string) {
     throw new Error(`Can't delete this batch — it still has ${blockers.join(" and ")}. Remove those first.`);
   }
 
+  await prisma.enrollment.deleteMany({ where: { batchId } });
   await prisma.batch.delete({ where: { id: batchId } });
   revalidatePath("/admin/batches");
 }

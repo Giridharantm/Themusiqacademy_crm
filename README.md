@@ -57,7 +57,7 @@ Enforced both in the UI (`src/components/batch-schedule-fields.tsx`) and server-
 
 Each batch on `/admin/batches` has an **Edit** disclosure to change its teacher, day/time, or room after creation (`updateBatch()`) — the same day/time picker as "New batch", pre-filled with its current values. Instrument isn't editable, since every enrollment and subscription pooled against that batch is keyed on it — moving to a different instrument goes through delete + create a fresh batch instead, the same restriction as editing a student's enrollment.
 
-An `INACTIVE` student never shows up in a batch's roster, its student count, or the day's attendance-marking list — even if their individual `Enrollment` rows are still `ACTIVE` (marking a student inactive doesn't touch those, so re-activating them doesn't require re-enrolling anywhere). Every one of these views filters on the student's own status, not just the enrollment's, so this stays true everywhere a roster is built from `Enrollment`.
+An `INACTIVE` student never shows up in a batch's roster, its student count, or the day's attendance-marking list — even if their individual `Enrollment` rows are still `ACTIVE` (marking a student inactive doesn't touch those, so re-activating them doesn't require re-enrolling anywhere). Every one of these views filters on the student's own status, not just the enrollment's, so this stays true everywhere a roster is built from `Enrollment`. Deleting a batch follows the same rule: only an enrolled *active* student blocks it (with a clear error naming how many), while any leftover enrollment from an inactive student is cleaned up automatically rather than blocking a deletion that looks — and is — perfectly safe.
 
 ## Dashboard
 
