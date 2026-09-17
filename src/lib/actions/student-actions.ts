@@ -143,10 +143,14 @@ export async function enrollInBatch(studentId: string, formData: FormData) {
   revalidatePath(`/admin/students/${studentId}`);
 }
 
-// Moves an enrollment to a different batch of the SAME instrument (e.g.
-// swapping a student from Tuesday to Wednesday) — switching instrument
-// entirely should go through delete + a fresh enrollment instead, since that
-// changes which subscription pool the enrollment draws from.
+// Moves an enrollment to a different batch — a different day/time of the
+// same instrument (e.g. Tuesday to Wednesday Guitar), or a different
+// instrument entirely (e.g. Drums to Keyboard). Safe either way: a
+// Subscription pools by (student, course) from Attendance directly, never
+// from the Enrollment row, so retargeting batchId doesn't touch any
+// subscription's usage. Moving instrument leaves the old course's
+// subscription exactly as it was — the destination course's own "no active
+// subscription" banner prompts for a new one, same as any fresh enrollment.
 export async function updateEnrollmentBatch(enrollmentId: string, studentId: string, formData: FormData) {
   await requireRole("ADMIN");
 
@@ -154,14 +158,11 @@ export async function updateEnrollmentBatch(enrollmentId: string, studentId: str
   if (!newBatchId) throw new Error("A batch is required");
 
   const [enrollment, newBatch] = await Promise.all([
-    prisma.enrollment.findUnique({ where: { id: enrollmentId }, include: { batch: true } }),
+    prisma.enrollment.findUnique({ where: { id: enrollmentId } }),
     prisma.batch.findUnique({ where: { id: newBatchId } }),
   ]);
   if (!enrollment) throw new Error("Enrollment not found");
   if (!newBatch) throw new Error("Batch not found");
-  if (newBatch.courseId !== enrollment.batch.courseId) {
-    throw new Error("Can only move an enrollment to a different day/time of the same instrument");
-  }
 
   const clash = await prisma.enrollment.findUnique({
     where: { studentId_batchId: { studentId, batchId: newBatchId } },

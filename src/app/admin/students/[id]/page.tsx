@@ -87,10 +87,12 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   // existing batches, instead of in a form disconnected from them below.
   const availableBatches = allAvailableBatches.filter((b) => !enrolledCourseIds.has(b.courseId));
 
-  // For editing an existing enrollment: other day/time slots of the SAME
-  // instrument the student isn't already in, plus its own current batch.
-  function editableBatchesFor(courseId: string, currentBatchId: string) {
-    return batches.filter((b) => b.courseId === courseId && (b.id === currentBatchId || !enrolledBatchIds.has(b.id)));
+  // For editing an existing enrollment: any batch (any instrument) the
+  // student isn't already in, plus its own current batch — this is also how
+  // a student switches instrument entirely (e.g. Drums to Keyboard), not
+  // just how they move day/time within the same one.
+  function editableBatchesFor(currentBatchId: string) {
+    return batches.filter((b) => b.id === currentBatchId || !enrolledBatchIds.has(b.id));
   }
 
   const courseIdsWithActiveSubscription = student.subscriptions.filter((s) => s.status === "ACTIVE").map((s) => s.courseId);
@@ -183,10 +185,10 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                                 <summary className="text-indigo-600 hover:underline cursor-pointer list-none">Edit</summary>
                                 <form action={updateEnrollmentBatch.bind(null, e.id, student.id)} className="flex items-end gap-2 mt-2">
                                   <div className="flex-1 min-w-[10rem]">
-                                    <Select label="Day / time" name="batchId" defaultValue={e.batchId}>
-                                      {editableBatchesFor(e.batch.courseId, e.batchId).map((b) => (
+                                    <Select label="Instrument / day / time" name="batchId" defaultValue={e.batchId}>
+                                      {editableBatchesFor(e.batchId).map((b) => (
                                         <option key={b.id} value={b.id}>
-                                          {DAY_LABELS[b.dayOfWeek]} · {formatTimeLabel(b.startTime)} - {formatTimeLabel(b.endTime)}
+                                          {b.course.name} · {DAY_LABELS[b.dayOfWeek]} · {formatTimeLabel(b.startTime)} - {formatTimeLabel(b.endTime)}
                                         </option>
                                       ))}
                                     </Select>
