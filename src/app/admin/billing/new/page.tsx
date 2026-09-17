@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { createInvoice } from "@/lib/actions/billing-actions";
-import { Card, CardBody, CardHeader, PageHeader, Input, Select, Textarea, Button } from "@/components/ui";
+import { Card, CardBody, CardHeader, PageHeader, Input, Select, Textarea } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import { InvoiceItemsFields } from "@/components/invoice-items-fields";
 import { DISCOUNT_STEPS } from "@/lib/subscription";
 
@@ -52,7 +53,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
               <Input label="Billing period end" name="periodEnd" type="date" />
             </div>
             <Textarea label="Notes" name="notes" />
-            <Button type="submit" className="w-full">Create invoice</Button>
+            <SubmitButton className="w-full" pendingText="Creating…">Create invoice</SubmitButton>
           </form>
         </CardBody>
       </Card>

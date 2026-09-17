@@ -103,3 +103,21 @@ export async function cancelInvoice(invoiceId: string) {
   revalidatePath(`/admin/billing/${invoiceId}`);
   revalidatePath("/admin/billing");
 }
+
+// Removes an invoice outright — for one raised by mistake (a double-click
+// duplicate, the wrong student picked). Refuses once a payment is recorded
+// against it: at that point it's real history, and "Cancel" (which keeps
+// the row, just marks it void) is the correct way to void it instead.
+export async function deleteInvoice(invoiceId: string) {
+  await requireRole("ADMIN");
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId }, include: { payments: true } });
+  if (!invoice) return;
+  if (invoice.payments.length > 0) {
+    throw new Error("Can't delete an invoice with a recorded payment — cancel it instead.");
+  }
+
+  await prisma.invoice.delete({ where: { id: invoiceId } });
+  revalidatePath("/admin/billing");
+  redirect("/admin/billing");
+}

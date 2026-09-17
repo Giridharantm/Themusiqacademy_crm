@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { recordPayment, cancelInvoice } from "@/lib/actions/billing-actions";
+import { recordPayment, cancelInvoice, deleteInvoice } from "@/lib/actions/billing-actions";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Input, Select, Button, EmptyState } from "@/components/ui";
 import { PrintButton } from "@/components/print-button";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { format } from "date-fns";
 
 const statusColors: Record<string, string> = {
@@ -161,6 +162,19 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
               <CardBody>
                 <form action={cancelInvoice.bind(null, invoice.id)}>
                   <Button type="submit" variant="danger" className="w-full">Cancel invoice</Button>
+                </form>
+              </CardBody>
+            </Card>
+          )}
+
+          {invoice.payments.length === 0 && (
+            <Card>
+              <CardHeader title="Raised in error?" subtitle="Only possible before any payment is recorded" />
+              <CardBody>
+                <form action={deleteInvoice.bind(null, invoice.id)}>
+                  <ConfirmSubmitButton variant="danger" className="w-full" confirmMessage="Delete this invoice permanently? This cannot be undone.">
+                    Delete invoice
+                  </ConfirmSubmitButton>
                 </form>
               </CardBody>
             </Card>
