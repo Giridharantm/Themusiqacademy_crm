@@ -78,6 +78,7 @@ export default async function StudentsPage({
 
   function matchesRenewalFilter(sub: (typeof students)[number]["subs"][number]) {
     if (renewal === "this-month") return sub.inThisMonth;
+    if (renewal === "under6") return sub.remaining < 6;
     if (renewal === "soon") return sub.urgency === "soon";
     if (renewal === "due") return sub.urgency === "due";
     return true;

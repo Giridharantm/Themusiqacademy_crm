@@ -32,6 +32,7 @@ function AutoSubmitSelect({
 
 const RENEWAL_OPTIONS: Option[] = [
   { value: "this-month", label: "Renewing this month" },
+  { value: "under6", label: "Fewer than 6 left" },
   { value: "soon", label: "Renew soon (≤ 2 left)" },
   { value: "due", label: "Renewal overdue" },
 ];

@@ -2,7 +2,20 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Card, CardBody, CardHeader, PageHeader, StatCard, EmptyState, Badge, Button } from "@/components/ui";
 import { markStudentFollowUpDone } from "@/lib/actions/student-actions";
+import { subscriptionTotals, countUsedClasses, attendanceForSubscription } from "@/lib/subscription";
 import { format } from "date-fns";
+
+// Below this many classes remaining, a subscription counts toward the
+// dashboard's "Renewals due soon" stat — independent of its expiry date, so
+// a student who's burning through classes fast still surfaces even with
+// weeks left on the calendar. Distinct from the per-subscription "Renew
+// soon" badge (remaining <= 2) used elsewhere.
+const LOW_CLASSES_THRESHOLD = 6;
+
+// No PRESENT attendance in this many days (for a student with an active
+// subscription that still has classes left) counts as "irregular" — they're
+// paying for classes they aren't using.
+const IRREGULAR_DAYS = 20;
 
 export default async function AdminDashboard() {
   const now = new Date();
@@ -11,10 +24,13 @@ export default async function AdminDashboard() {
   const todayDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayCode = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][now.getDay()];
 
-  const [leadCounts, activeStudents, renewalsThisMonth, upcomingFollowUps, studentCallbacksDue, todaysBatches, invoices] = await Promise.all([
+  const [leadCounts, activeStudents, activeSubscriptions, upcomingFollowUps, studentCallbacksDue, todaysBatches, invoices] = await Promise.all([
     prisma.lead.groupBy({ by: ["status"], _count: true }),
     prisma.student.count({ where: { status: "ACTIVE" } }),
-    prisma.subscription.count({ where: { status: "ACTIVE", endDate: { gte: monthStart, lt: monthEnd } } }),
+    prisma.subscription.findMany({
+      where: { status: "ACTIVE" },
+      include: { bonusGrants: true, course: true, student: { include: { attendance: true } } },
+    }),
     prisma.followUp.findMany({
       where: { done: false, followUpDate: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
       include: { lead: true },
@@ -40,6 +56,36 @@ export default async function AdminDashboard() {
     .reduce((sum, l) => sum + l._count, 0);
   const trialCount = (leadCountByStatus.TRIAL_SCHEDULED ?? 0) + (leadCountByStatus.TRIAL_COMPLETED ?? 0);
   const leadsHint = `New ${leadCountByStatus.NEW ?? 0} · Contacted ${leadCountByStatus.CONTACTED ?? 0} · Trial ${trialCount}`;
+
+  const irregularSince = new Date(todayDateOnly);
+  irregularSince.setDate(irregularSince.getDate() - IRREGULAR_DAYS);
+
+  // Resolve each active subscription's live remaining-classes and last
+  // PRESENT date once, so the "due soon" stat and the two watch-list
+  // sections below all agree with each other and with the rest of the app.
+  const subscriptionStats = activeSubscriptions.map((sub) => {
+    const courseAttendance = sub.student.attendance.filter((a) => a.courseId === sub.courseId);
+    const used = countUsedClasses(attendanceForSubscription(sub.startDate, courseAttendance));
+    const remaining = subscriptionTotals(sub, used).remaining;
+    const lastPresent = courseAttendance
+      .filter((a) => a.status === "PRESENT")
+      .reduce((latest: Date | null, a) => (!latest || a.date > latest ? a.date : latest), null);
+    return { sub, remaining, lastPresent };
+  });
+
+  const renewalsDueSoon = subscriptionStats.filter((s) => s.remaining < LOW_CLASSES_THRESHOLD).length;
+
+  const expiringThisMonth = subscriptionStats
+    .filter((s) => s.sub.endDate && s.sub.endDate >= monthStart && s.sub.endDate < monthEnd)
+    .sort((a, b) => a.sub.endDate!.getTime() - b.sub.endDate!.getTime());
+
+  // A subscription that started too recently to have had a fair chance to
+  // rack up 20 quiet days yet doesn't count — otherwise every brand-new
+  // enrollment would show up as "irregular" on day one.
+  const irregularStudents = subscriptionStats
+    .filter((s) => s.remaining > 0 && s.sub.startDate < irregularSince)
+    .filter((s) => !s.lastPresent || s.lastPresent < irregularSince)
+    .sort((a, b) => (a.lastPresent?.getTime() ?? 0) - (b.lastPresent?.getTime() ?? 0));
 
   const revenueThisMonth = invoices
     .flatMap((i) => i.payments)
@@ -93,7 +139,7 @@ export default async function AdminDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <StatCard label="Open leads" value={totalOpenLeads} hint={leadsHint} href="/admin/leads?status=open" />
         <StatCard label="Active students" value={activeStudents} href="/admin/students?status=ACTIVE" />
-        <StatCard label="Renewals this month" value={renewalsThisMonth} hint="Subscriptions expiring this month" href="/admin/students?renewal=this-month" />
+        <StatCard label="Renewals due soon" value={renewalsDueSoon} hint={`Fewer than ${LOW_CLASSES_THRESHOLD} classes remaining`} href="/admin/students?renewal=under6" />
         <StatCard label="Classes today" value={todaysBatches.length} href={`/admin/batches?day=${todayCode}`} />
         <StatCard label="Revenue this month" value={`Rs. ${revenueThisMonth.toLocaleString("en-IN")}`} hint="Payments collected this month" href="/admin/billing" />
         <StatCard label="Outstanding dues" value={`Rs. ${outstandingDues.toLocaleString("en-IN")}`} hint="Pending, partial & overdue invoices" href="/admin/billing" />
@@ -192,6 +238,59 @@ export default async function AdminDashboard() {
                 })}
               </ul>
             )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader title="Expiry & attendance watch" subtitle="Who to check in on this month" />
+          <CardBody className="space-y-5">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                Expiring this month ({expiringThisMonth.length})
+              </p>
+              {expiringThisMonth.length === 0 ? (
+                <EmptyState text="No subscriptions expiring this month" />
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {expiringThisMonth.slice(0, 6).map(({ sub }) => (
+                    <li key={sub.id} className="py-2 flex items-center justify-between gap-3">
+                      <Link href={`/admin/students/${sub.studentId}`} className="text-sm font-medium text-slate-900 hover:text-indigo-600 min-w-0 truncate">
+                        {sub.student.name} <span className="text-xs font-normal text-slate-400">· {sub.course.name}</span>
+                      </Link>
+                      <span className="text-xs text-slate-400 shrink-0">{format(sub.endDate!, "d MMM")}</span>
+                    </li>
+                  ))}
+                  {expiringThisMonth.length > 6 && (
+                    <li className="pt-2 text-xs text-slate-400">+{expiringThisMonth.length - 6} more</li>
+                  )}
+                </ul>
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                Irregular attendance ({irregularStudents.length})
+              </p>
+              {irregularStudents.length === 0 ? (
+                <EmptyState text="No irregular students right now" />
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {irregularStudents.slice(0, 6).map(({ sub, lastPresent }) => (
+                    <li key={sub.id} className="py-2 flex items-center justify-between gap-3">
+                      <Link href={`/admin/students/${sub.studentId}`} className="text-sm font-medium text-slate-900 hover:text-indigo-600 min-w-0 truncate">
+                        {sub.student.name} <span className="text-xs font-normal text-slate-400">· {sub.course.name}</span>
+                      </Link>
+                      <span className="text-xs text-red-600 shrink-0">
+                        {lastPresent ? `Last seen ${format(lastPresent, "d MMM")}` : "Never attended"}
+                      </span>
+                    </li>
+                  ))}
+                  {irregularStudents.length > 6 && (
+                    <li className="pt-2 text-xs text-slate-400">+{irregularStudents.length - 6} more</li>
+                  )}
+                </ul>
+              )}
+            </div>
           </CardBody>
         </Card>
       </div>
