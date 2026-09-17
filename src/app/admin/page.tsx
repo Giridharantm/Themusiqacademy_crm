@@ -73,11 +73,14 @@ export default async function AdminDashboard() {
     return { sub, remaining, lastPresent };
   });
 
-  const renewalsDueSoon = subscriptionStats.filter((s) => s.remaining < LOW_CLASSES_THRESHOLD).length;
-
-  const expiringThisMonth = subscriptionStats
-    .filter((s) => s.sub.endDate && s.sub.endDate >= monthStart && s.sub.endDate < monthEnd)
-    .sort((a, b) => a.sub.endDate!.getTime() - b.sub.endDate!.getTime());
+  // Every active subscription with fewer than 6 classes remaining — not
+  // bounded to any calendar month, so this is the same backing list either
+  // way: the dashboard stat is just its count, and the "Pending renewal" box
+  // below is the actual list, most urgent (fewest remaining) first.
+  const pendingRenewals = subscriptionStats
+    .filter((s) => s.remaining < LOW_CLASSES_THRESHOLD)
+    .sort((a, b) => a.remaining - b.remaining);
+  const renewalsDueSoon = pendingRenewals.length;
 
   // A subscription that started too recently to have had a fair chance to
   // rack up 20 quiet days yet doesn't count — otherwise every brand-new
@@ -242,26 +245,28 @@ export default async function AdminDashboard() {
         </Card>
 
         <Card>
-          <CardHeader title="Expiry & attendance watch" subtitle="Who to check in on this month" />
+          <CardHeader title="Expiry & attendance watch" subtitle="Who needs attention, whenever they're due" />
           <CardBody className="space-y-5">
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                Expiring this month ({expiringThisMonth.length})
+                Pending renewal ({pendingRenewals.length})
               </p>
-              {expiringThisMonth.length === 0 ? (
-                <EmptyState text="No subscriptions expiring this month" />
+              {pendingRenewals.length === 0 ? (
+                <EmptyState text="No pending renewals" />
               ) : (
                 <ul className="divide-y divide-slate-100">
-                  {expiringThisMonth.slice(0, 6).map(({ sub }) => (
+                  {pendingRenewals.slice(0, 6).map(({ sub, remaining }) => (
                     <li key={sub.id} className="py-2 flex items-center justify-between gap-3">
                       <Link href={`/admin/students/${sub.studentId}`} className="text-sm font-medium text-slate-900 hover:text-indigo-600 min-w-0 truncate">
                         {sub.student.name} <span className="text-xs font-normal text-slate-400">· {sub.course.name}</span>
                       </Link>
-                      <span className="text-xs text-slate-400 shrink-0">{format(sub.endDate!, "d MMM")}</span>
+                      <span className={`text-xs shrink-0 ${remaining <= 0 ? "text-red-600" : "text-slate-400"}`}>
+                        {remaining} left
+                      </span>
                     </li>
                   ))}
-                  {expiringThisMonth.length > 6 && (
-                    <li className="pt-2 text-xs text-slate-400">+{expiringThisMonth.length - 6} more</li>
+                  {pendingRenewals.length > 6 && (
+                    <li className="pt-2 text-xs text-slate-400">+{pendingRenewals.length - 6} more</li>
                   )}
                 </ul>
               )}
