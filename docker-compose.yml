@@ -30,10 +30,6 @@ services:
     environment:
       DATABASE_URL: postgresql://crm:${POSTGRES_PASSWORD:-crmdevpassword}@db:5432/crm
       AUTH_SECRET: ${AUTH_SECRET}
-      # Optional — see README "Automated check-in". Left unset (empty),
-      # POST /api/attendance/checkin and GET /api/attendance/roster disable
-      # themselves (503) rather than running with no real auth.
-      ATTENDANCE_API_KEY: ${ATTENDANCE_API_KEY:-}
 
   caddy:
     image: caddy:2-alpine

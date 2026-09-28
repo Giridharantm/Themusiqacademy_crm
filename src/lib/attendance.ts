@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import bcrypt from "bcryptjs";
 
 export function parseDateOnly(dateStr: string) {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -36,24 +35,4 @@ export async function unmarkStudentAttendance(studentId: string, courseId: strin
   const date = parseDateOnly(dateStr);
 
   await prisma.attendance.deleteMany({ where: { studentId, courseId, date } });
-}
-
-// Attribution for attendance recorded by something other than a specific
-// teacher/admin — a kiosk tablet, a webhook from a third-party check-in
-// service. Deliberately distinct from markedById: null, which already means
-// "inserted by a migration/backfill script" elsewhere in this app; blurring
-// the two would break that convention. Created lazily on first use, so
-// there's nothing extra to run during deployment — the password hash is a
-// random value nobody knows, so the account can never actually log in.
-export async function getOrCreateAttendanceKioskUser() {
-  return prisma.user.upsert({
-    where: { email: "attendance-kiosk@system.local" },
-    update: {},
-    create: {
-      name: "Attendance Kiosk",
-      email: "attendance-kiosk@system.local",
-      passwordHash: await bcrypt.hash(crypto.randomUUID(), 10),
-      role: "ADMIN",
-    },
-  });
 }
