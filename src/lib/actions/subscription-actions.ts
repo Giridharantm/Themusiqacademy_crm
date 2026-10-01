@@ -86,31 +86,23 @@ export async function createOrRenewSubscription(studentId: string, courseId: str
   revalidatePath("/admin/attendance");
 }
 
-// Standalone top-up for an already-active subscription (e.g. a promotion
-// unrelated to renewal) — not part of the renewal flow.
-export async function addBonusClasses(subscriptionId: string, studentId: string, formData: FormData) {
+// Sets the subscription's bonus classes to exactly this amount — one
+// amendable number rather than a running list of additive grants, so
+// correcting a mistake (or taking a promotion back entirely) is a single
+// edit instead of deleting old grants one at a time. Replaces whatever
+// grant(s) already exist with at most one; 0 clears the bonus entirely.
+export async function setBonusClasses(subscriptionId: string, studentId: string, formData: FormData) {
   const user = await requireRole("ADMIN");
 
-  const classes = Number(formData.get("classes") ?? 0);
+  const classes = Math.max(0, Number(formData.get("classes") ?? 0));
   const reason = String(formData.get("reason") ?? "").trim() || null;
-  if (!classes || classes <= 0) throw new Error("Bonus classes must be a positive number");
 
-  await prisma.bonusGrant.create({
-    data: { subscriptionId, classes, reason, grantedById: user.id },
-  });
-
-  revalidatePath(`/admin/students/${studentId}`);
-  revalidatePath(`/parent/students/${studentId}`);
-}
-
-// Removes a bonus grant entered by mistake (wrong amount, wrong student) —
-// the only way to correct one, since addBonusClasses only ever creates new
-// rows. Safe regardless of whether the parent subscription is still active
-// or has since closed: it just reduces whatever totalClasses derives from.
-export async function deleteBonusGrant(bonusGrantId: string, studentId: string) {
-  await requireRole("ADMIN");
-
-  await prisma.bonusGrant.delete({ where: { id: bonusGrantId } });
+  await prisma.bonusGrant.deleteMany({ where: { subscriptionId } });
+  if (classes > 0) {
+    await prisma.bonusGrant.create({
+      data: { subscriptionId, classes, reason, grantedById: user.id },
+    });
+  }
 
   revalidatePath(`/admin/students/${studentId}`);
   revalidatePath(`/parent/students/${studentId}`);

@@ -15,8 +15,7 @@ import {
 import {
   createOrRenewSubscription,
   updateSubscription,
-  addBonusClasses,
-  deleteBonusGrant,
+  setBonusClasses,
   cancelSubscription,
   addPastSubscription,
   updateClosedSubscription,
@@ -318,30 +317,28 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                         {activeSubscription && (
                           <>
                             <details className="inline-block" key={activeSubscription.bonusGrants.length}>
-                              <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none">+ Add bonus classes</summary>
-                              <form action={addBonusClasses.bind(null, activeSubscription.id, student.id)} className="flex items-end gap-2 mt-2">
+                              <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none">Amend bonus classes</summary>
+                              <form action={setBonusClasses.bind(null, activeSubscription.id, student.id)} className="flex items-end gap-2 mt-2">
                                 <div className="w-24">
-                                  <Input label="Classes" name="classes" type="number" min="1" required />
+                                  <Input
+                                    label="Classes"
+                                    name="classes"
+                                    type="number"
+                                    min="0"
+                                    required
+                                    defaultValue={activeSubscription.bonusGrants.reduce((sum, g) => sum + g.classes, 0)}
+                                  />
                                 </div>
                                 <div className="flex-1">
-                                  <Input label="Reason" name="reason" placeholder="e.g. Diwali offer" />
+                                  <Input
+                                    label="Reason"
+                                    name="reason"
+                                    placeholder="e.g. Diwali offer"
+                                    defaultValue={activeSubscription.bonusGrants[activeSubscription.bonusGrants.length - 1]?.reason ?? ""}
+                                  />
                                 </div>
-                                <Button type="submit" variant="secondary">Add</Button>
+                                <Button type="submit" variant="secondary">Save</Button>
                               </form>
-                              {activeSubscription.bonusGrants.length > 0 && (
-                                <ul className="mt-2 space-y-1">
-                                  {activeSubscription.bonusGrants.map((g) => (
-                                    <li key={g.id} className="flex items-center justify-between gap-2 text-xs text-slate-500">
-                                      <span>+{g.classes} bonus{g.reason ? ` — ${g.reason}` : ""}</span>
-                                      <form action={deleteBonusGrant.bind(null, g.id, student.id)}>
-                                        <ConfirmSubmitButton confirmMessage="Remove this bonus grant?" className="text-xs">
-                                          Remove
-                                        </ConfirmSubmitButton>
-                                      </form>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
                             </details>
                             <details className="inline-block">
                               <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none">Edit subscription</summary>
