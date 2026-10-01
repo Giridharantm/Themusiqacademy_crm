@@ -16,6 +16,7 @@ import {
   createOrRenewSubscription,
   updateSubscription,
   addBonusClasses,
+  deleteBonusGrant,
   cancelSubscription,
   addPastSubscription,
   updateClosedSubscription,
@@ -327,6 +328,20 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                                 </div>
                                 <Button type="submit" variant="secondary">Add</Button>
                               </form>
+                              {activeSubscription.bonusGrants.length > 0 && (
+                                <ul className="mt-2 space-y-1">
+                                  {activeSubscription.bonusGrants.map((g) => (
+                                    <li key={g.id} className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                                      <span>+{g.classes} bonus{g.reason ? ` — ${g.reason}` : ""}</span>
+                                      <form action={deleteBonusGrant.bind(null, g.id, student.id)}>
+                                        <ConfirmSubmitButton confirmMessage="Remove this bonus grant?" className="text-xs">
+                                          Remove
+                                        </ConfirmSubmitButton>
+                                      </form>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
                             </details>
                             <details className="inline-block">
                               <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none">Edit subscription</summary>

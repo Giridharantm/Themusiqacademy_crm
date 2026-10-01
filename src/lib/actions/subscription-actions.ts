@@ -103,6 +103,19 @@ export async function addBonusClasses(subscriptionId: string, studentId: string,
   revalidatePath(`/parent/students/${studentId}`);
 }
 
+// Removes a bonus grant entered by mistake (wrong amount, wrong student) —
+// the only way to correct one, since addBonusClasses only ever creates new
+// rows. Safe regardless of whether the parent subscription is still active
+// or has since closed: it just reduces whatever totalClasses derives from.
+export async function deleteBonusGrant(bonusGrantId: string, studentId: string) {
+  await requireRole("ADMIN");
+
+  await prisma.bonusGrant.delete({ where: { id: bonusGrantId } });
+
+  revalidatePath(`/admin/students/${studentId}`);
+  revalidatePath(`/parent/students/${studentId}`);
+}
+
 // Corrects fields on the subscription that's still active — a typo in the
 // start date, the wrong plan picked, a carry-forward number that needs
 // fixing — without treating it as a renewal. Unlike createOrRenewSubscription,
