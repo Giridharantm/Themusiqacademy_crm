@@ -70,7 +70,7 @@ export function StudentFilterFields({
         placeholderValue="ALL"
       />
       <AutoSubmitSelect name="courseId" value={selectedCourseId} options={courseOptions} placeholder="All instruments" />
-      <AutoSubmitSelect name="renewal" value={selectedRenewal} options={RENEWAL_OPTIONS} placeholder="All renewal states" />
+      <AutoSubmitSelect name="renewal" value={selectedRenewal} options={RENEWAL_OPTIONS} placeholder="All renewal statuses" />
       <AutoSubmitSelect name="sort" value={selectedSort} options={SORT_OPTIONS} placeholder="Sort: Name (A-Z)" />
     </div>
   );
