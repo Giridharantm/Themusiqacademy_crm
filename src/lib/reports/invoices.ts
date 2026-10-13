@@ -21,12 +21,17 @@ export function currentMonthRange() {
 
 export async function getInvoiceReportRows(filters: InvoiceReportFilters) {
   const { status, dateFrom, dateTo } = filters;
+  // "To" is a calendar day and invoices carry a time of day, so the bound is
+  // the start of the *next* day (exclusive) — comparing against the To day's
+  // own midnight would silently drop everything raised on the last day.
+  const to = dateTo ? parseDateOnly(dateTo) : undefined;
+  const toExclusive = to ? new Date(to.getFullYear(), to.getMonth(), to.getDate() + 1) : undefined;
   return prisma.invoice.findMany({
     where: {
       status: status ? (status as "PENDING" | "PARTIAL" | "PAID" | "OVERDUE" | "CANCELLED") : undefined,
       issueDate: {
         gte: dateFrom ? parseDateOnly(dateFrom) : undefined,
-        lte: dateTo ? parseDateOnly(dateTo) : undefined,
+        lt: toExclusive,
       },
     },
     include: { student: true, payments: true },

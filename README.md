@@ -134,7 +134,7 @@ Each page also has a **tracking** side — search a student and see one *combine
 - **Students** — status, instrument, gender, join-date range, free-text search. Columns include every core field plus enrolled instruments/batches, active subscriptions, and guardian details.
 - **Leads** — status, source, interested instrument, created-date range, search. Includes the most recent follow-up and the converted student's ID, if any.
 - **Attendance** — instrument, status, date range, student search. One row per attendance record.
-- **Invoices & tax** — the one built specifically to file monthly GST: defaults to the **current calendar month** (not "all invoices ever") when no date range is given, and the page shows a summary row of Taxable Amount / CGST / SGST / Total Invoiced for the filtered period before you even download, so you can sanity-check the return total against the report. Both the summary and the CSV use each invoice's stored GST breakdown (see "Billing" above) rather than recalculating it.
+- **Invoices & tax** — the one built specifically to file monthly GST: defaults to the **current calendar month** (not "all invoices ever") when no date range is given, and the page shows a summary row of Taxable Amount / CGST / SGST / Total Invoiced for the filtered period before you even download, so you can sanity-check the return total against the report. Both the summary and the CSV use each invoice's stored GST breakdown (see "Billing" above) rather than recalculating it. The "To" date is inclusive of the whole day — an invoice raised at 11 AM on the last day of the month is in that month's report (the filter used to compare against that day's midnight and silently dropped it).
 
 ## Search
 
