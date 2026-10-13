@@ -3,9 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { createStudent } from "@/lib/actions/student-actions";
 import { Card, CardBody, CardHeader, PageHeader, Input, Select, Button, EmptyState, Badge } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
+import { DownloadCsvLink } from "@/components/download-csv-link";
 import { StudentFilterFields } from "@/components/student-filter-fields";
-import { subscriptionTotals, countUsedClasses, attendanceForSubscription, renewalUrgency } from "@/lib/subscription";
-import { normalizeSearchQuery, phoneSearchDigits } from "@/lib/search";
+import { getStudentList } from "@/lib/student-list";
+import { normalizeSearchQuery } from "@/lib/search";
 import { format } from "date-fns";
 
 const URGENCY_COLORS: Record<string, string> = { ok: "green", soon: "yellow", due: "red" };
@@ -17,97 +18,11 @@ export default async function StudentsPage({
 }) {
   const { q: rawQ, status, courseId, renewal, sort } = await searchParams;
   const q = normalizeSearchQuery(rawQ);
-  const phoneDigits = q ? phoneSearchDigits(q) : undefined;
 
-  // No status in the URL at all (a fresh visit) defaults to Active only —
-  // inactive students shouldn't clutter the default view. "ALL" is the
-  // filter's explicit "show inactive too" choice, distinct from that
-  // default; it must survive round-tripping through the search box's hidden
-  // fields, which is why it isn't just an empty string (those get dropped).
-  const effectiveStatus = status === undefined ? "ACTIVE" : status === "ALL" ? undefined : status;
-
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-  const [studentsRaw, courses] = await Promise.all([
-    prisma.student.findMany({
-      where: {
-        status: effectiveStatus,
-        ...(q
-          ? {
-              OR: [
-                { name: { contains: q, mode: "insensitive" } },
-                ...(phoneDigits ? [{ phone: { contains: phoneDigits } }] : []),
-                { email: { contains: q, mode: "insensitive" } },
-                { studentCode: { contains: q, mode: "insensitive" } },
-              ],
-            }
-          : {}),
-        ...(courseId ? { enrollments: { some: { batch: { courseId } } } } : {}),
-      },
-      include: {
-        enrollments: { include: { batch: { include: { course: true } } } },
-        subscriptions: { where: { status: "ACTIVE" }, include: { course: true, bonusGrants: true } },
-        attendance: true,
-      },
-      orderBy: { name: "asc" },
-    }),
+  const [{ students: filtered, relevantSubs }, courses] = await Promise.all([
+    getStudentList({ q: rawQ, status, courseId, renewal, sort }),
     prisma.course.findMany({ orderBy: { name: "asc" } }),
   ]);
-
-  // Resolve each active subscription's live remaining-classes/urgency/expiry
-  // once per student, so filtering, sorting and the row display all agree.
-  const students = studentsRaw.map((s) => {
-    const subs = s.subscriptions.map((sub) => {
-      const courseAttendance = s.attendance.filter((a) => a.courseId === sub.courseId);
-      const used = countUsedClasses(attendanceForSubscription(sub.startDate, courseAttendance));
-      const totals = subscriptionTotals(sub, used);
-      return {
-        courseName: sub.course.name,
-        endDate: sub.endDate,
-        totalClasses: totals.totalClasses,
-        used: totals.used,
-        remaining: totals.remaining,
-        urgency: renewalUrgency(totals.remaining),
-        inThisMonth: !!sub.endDate && sub.endDate >= monthStart && sub.endDate < monthEnd,
-      };
-    });
-    return { ...s, subs };
-  });
-
-  function matchesRenewalFilter(sub: (typeof students)[number]["subs"][number]) {
-    if (renewal === "this-month") return sub.inThisMonth;
-    if (renewal === "under6") return sub.remaining < 6;
-    if (renewal === "soon") return sub.urgency === "soon";
-    if (renewal === "due") return sub.urgency === "due";
-    return true;
-  }
-
-  let filtered = renewal
-    ? students.filter((s) => s.subs.some(matchesRenewalFilter))
-    : students;
-
-  // When a renewal filter is on, only show the subscriptions that actually
-  // matched it — otherwise a student with one overdue and one healthy
-  // subscription would bury the reason they're in the list.
-  const relevantSubs = (s: (typeof students)[number]) => (renewal ? s.subs.filter(matchesRenewalFilter) : s.subs);
-
-  if (sort === "joined") {
-    filtered = [...filtered].sort((a, b) => b.joinDate.getTime() - a.joinDate.getTime());
-  } else if (sort === "renewal") {
-    filtered = [...filtered].sort((a, b) => {
-      const aDate = Math.min(...relevantSubs(a).map((sub) => sub.endDate?.getTime() ?? Infinity), Infinity);
-      const bDate = Math.min(...relevantSubs(b).map((sub) => sub.endDate?.getTime() ?? Infinity), Infinity);
-      return aDate - bDate;
-    });
-  } else if (sort === "remaining") {
-    filtered = [...filtered].sort((a, b) => {
-      const aMin = Math.min(...relevantSubs(a).map((sub) => sub.remaining), Infinity);
-      const bMin = Math.min(...relevantSubs(b).map((sub) => sub.remaining), Infinity);
-      return aMin - bMin;
-    });
-  }
 
   const courseOptions = courses.map((c) => ({ value: c.id, label: c.name }));
 
@@ -116,7 +31,12 @@ export default async function StudentsPage({
       <PageHeader
         title="Students"
         subtitle="Active students by default — use the status filter to include inactive ones"
-        action={<SearchBox placeholder="Search by name, ID, phone..." defaultValue={q} extraParams={{ status, courseId, renewal, sort }} />}
+        action={
+          <div className="flex items-center gap-3 flex-wrap">
+            <SearchBox placeholder="Search by name, ID, phone..." defaultValue={q} extraParams={{ status, courseId, renewal, sort }} />
+            <DownloadCsvLink href="/admin/students/export" params={{ q, status, courseId, renewal, sort }} />
+          </div>
+        }
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
