@@ -1,6 +1,7 @@
 import { Card, CardBody, CardHeader, PageHeader, Input, Select, Button, EmptyState, Badge, StatCard } from "@/components/ui";
 import { DownloadCsvLink } from "@/components/download-csv-link";
 import { getInvoiceReportRows, currentMonthRange } from "@/lib/reports/invoices";
+import { taxTotals } from "@/lib/billing";
 import { format } from "date-fns";
 
 const PREVIEW_LIMIT = 150;
@@ -26,10 +27,11 @@ export default async function InvoicesReportPage({
 
   const rows = await getInvoiceReportRows({ status, dateFrom, dateTo });
 
-  const taxableTotal = rows.reduce((s, i) => s + i.amountWithoutGst, 0);
-  const cgstTotal = rows.reduce((s, i) => s + i.cgstAmount, 0);
-  const sgstTotal = rows.reduce((s, i) => s + i.sgstAmount, 0);
-  const invoicedTotal = rows.reduce((s, i) => s + i.total, 0);
+  const totals = taxTotals(rows);
+  const taxableTotal = totals.taxable;
+  const cgstTotal = totals.cgst;
+  const sgstTotal = totals.sgst;
+  const invoicedTotal = totals.invoiced;
 
   return (
     <div>
@@ -42,7 +44,7 @@ export default async function InvoicesReportPage({
             <Input label="From" name="dateFrom" type="date" defaultValue={dateFrom} />
             <Input label="To" name="dateTo" type="date" defaultValue={dateTo} />
             <Select label="Status" name="status" defaultValue={status ?? ""}>
-              <option value="">All (excl. cancelled shown too)</option>
+              <option value="">All (cancelled listed, not in totals)</option>
               <option value="PENDING">Pending</option>
               <option value="PARTIAL">Partial</option>
               <option value="PAID">Paid</option>
@@ -58,7 +60,7 @@ export default async function InvoicesReportPage({
         <StatCard label="Taxable amount" value={`Rs. ${taxableTotal.toFixed(2)}`} hint="Amount without GST" />
         <StatCard label="CGST (9%)" value={`Rs. ${cgstTotal.toFixed(2)}`} />
         <StatCard label="SGST (9%)" value={`Rs. ${sgstTotal.toFixed(2)}`} />
-        <StatCard label="Total invoiced" value={`Rs. ${invoicedTotal.toFixed(2)}`} hint={`${rows.length} invoice${rows.length !== 1 ? "s" : ""}`} />
+        <StatCard label="Total invoiced" value={`Rs. ${invoicedTotal.toFixed(2)}`} hint={`${totals.count} invoice${totals.count !== 1 ? "s" : ""}${totals.cancelledCount ? ` · ${totals.cancelledCount} cancelled excluded` : ""}`} />
       </div>
 
       <Card>

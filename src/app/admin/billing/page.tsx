@@ -33,6 +33,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
     .filter((i) => i.status === "PENDING" || i.status === "PARTIAL" || i.status === "OVERDUE")
     .reduce((sum, i) => sum + (i.total - i.payments.reduce((s, p) => s + p.amount, 0)), 0);
   const paidThisMonth = invoices
+    .filter((i) => i.status !== "CANCELLED")
     .flatMap((i) => i.payments)
     .filter((p) => {
       const now = new Date();

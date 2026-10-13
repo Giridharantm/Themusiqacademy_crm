@@ -157,11 +157,25 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             </Card>
           )}
 
-          {invoice.status !== "CANCELLED" && invoice.status !== "PAID" && (
+          {invoice.status !== "CANCELLED" && (
             <Card>
+              <CardHeader
+                title={invoice.payments.length > 0 ? "Raised in error?" : "Void this invoice"}
+                subtitle={invoice.payments.length > 0 ? "Already has payments, so it can be cancelled but not deleted" : "Keeps the record, marks it void"}
+              />
               <CardBody>
                 <form action={cancelInvoice.bind(null, invoice.id)}>
-                  <Button type="submit" variant="danger" className="w-full">Cancel invoice</Button>
+                  <ConfirmSubmitButton
+                    variant="danger"
+                    className="w-full"
+                    confirmMessage={
+                      invoice.payments.length > 0
+                        ? "Cancel this invoice? Its recorded payments stay on file but stop counting towards revenue, dues and the GST report — record the money against the correct invoice instead. This can't be undone."
+                        : "Cancel this invoice? It stays on file as void and drops out of dues and the GST report. This can't be undone."
+                    }
+                  >
+                    Cancel invoice
+                  </ConfirmSubmitButton>
                 </form>
               </CardBody>
             </Card>

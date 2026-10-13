@@ -102,6 +102,8 @@ export async function cancelInvoice(invoiceId: string) {
   await prisma.invoice.update({ where: { id: invoiceId }, data: { status: "CANCELLED" } });
   revalidatePath(`/admin/billing/${invoiceId}`);
   revalidatePath("/admin/billing");
+  revalidatePath("/admin");
+  revalidatePath("/admin/reports/invoices");
 }
 
 // Removes an invoice outright — for one raised by mistake (a double-click
