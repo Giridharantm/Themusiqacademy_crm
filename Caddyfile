@@ -1,3 +1,34 @@
 crm.themusiqacademy.com {
 	reverse_proxy app:3000
 }
+
+# Marketing website — plain static files from the sibling ../musiq-website
+# folder (mounted read-only at /srv/musiq-website, see docker-compose.yml).
+# Updating the site is just copying files there; no rebuild or restart.
+themusiqacademy.com {
+	root * /srv/musiq-website
+	encode zstd gzip
+	file_server
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	# CSS/JS aren't fingerprinted, so keep their cache short enough that an edit shows up soon.
+	@static path /assets/* /styles.css /script.js
+	header @static Cache-Control "public, max-age=3600"
+}
+
+www.themusiqacademy.com {
+	redir https://themusiqacademy.com{uri} permanent
+}
+
+# Look at the site by IP (plain HTTP) before/without DNS pointing here.
+# Marked noindex so a copy served from an IP never competes in search results.
+http://152.67.172.114 {
+	root * /srv/musiq-website
+	encode zstd gzip
+	file_server
+	header X-Robots-Tag "noindex, nofollow"
+}

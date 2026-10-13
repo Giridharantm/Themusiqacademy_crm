@@ -41,6 +41,8 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
+      # The marketing site lives in its own repo, checked out beside this one.
+      - ../musiq-website:/srv/musiq-website:ro
       - caddy_data:/data
       - caddy_config:/config
 
