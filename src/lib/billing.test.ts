@@ -1,5 +1,33 @@
 import { describe, it, expect } from "vitest";
-import { splitGst, taxTotals, GST_RATE } from "./billing";
+import { splitGst, taxTotals, paidInvoiceRevenue, GST_RATE } from "./billing";
+
+describe("paidInvoiceRevenue", () => {
+  const from = new Date(2026, 9, 1);
+  const to = new Date(2026, 10, 1);
+  const inv = (status: string, total: number, issueDate: Date) => ({ status, total, issueDate });
+
+  it("counts only PAID invoices raised in the month", () => {
+    const rows = [
+      inv("PAID", 4800, new Date(2026, 9, 5)),
+      inv("PAID", 13680, new Date(2026, 9, 31, 23, 30)),
+      inv("PENDING", 4800, new Date(2026, 9, 6)),
+      inv("PARTIAL", 4800, new Date(2026, 9, 7)),
+      inv("OVERDUE", 4800, new Date(2026, 9, 8)),
+      inv("CANCELLED", 12680, new Date(2026, 9, 9)),
+    ];
+    expect(paidInvoiceRevenue(rows, from, to)).toBe(18480);
+  });
+
+  it("belongs to the month the invoice was raised, not the month it was paid", () => {
+    const septInvoicePaidInOctober = inv("PAID", 4800, new Date(2026, 8, 17));
+    expect(paidInvoiceRevenue([septInvoicePaidInOctober], from, to)).toBe(0);
+  });
+
+  it("treats the start as inclusive and the end as exclusive", () => {
+    const rows = [inv("PAID", 100, from), inv("PAID", 200, to)];
+    expect(paidInvoiceRevenue(rows, from, to)).toBe(100);
+  });
+});
 
 describe("taxTotals", () => {
   const inv = (status: string, total: number) => ({ status, total, ...splitGst(total) });

@@ -28,6 +28,21 @@ export function taxTotals(invoices: TaxableInvoice[]) {
   };
 }
 
+// "Revenue this month": the total of invoices raised in the month that are
+// fully PAID. Pending, partial, overdue and cancelled invoices don't count.
+// Counting by invoice date (not by when the money arrived) keeps this figure
+// equal to the GST report's "Total invoiced" for the same month; an invoice
+// raised in September but paid in October belongs to September.
+export function paidInvoiceRevenue(
+  invoices: { status: string; total: number; issueDate: Date }[],
+  from: Date,
+  toExclusive: Date
+) {
+  return invoices
+    .filter((i) => i.status === "PAID" && i.issueDate >= from && i.issueDate < toExclusive)
+    .reduce((sum, i) => sum + i.total, 0);
+}
+
 export function splitGst(totalInclusive: number) {
   const amountWithoutGst = totalInclusive / (1 + GST_RATE);
   const gstTotal = totalInclusive - amountWithoutGst;

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardBody, CardHeader, PageHeader, Badge, EmptyState, Button, StatCard } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
 import { normalizeSearchQuery } from "@/lib/search";
+import { paidInvoiceRevenue } from "@/lib/billing";
 import { format } from "date-fns";
 
 const statusColors: Record<string, string> = {
@@ -32,14 +33,12 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   const pendingTotal = invoices
     .filter((i) => i.status === "PENDING" || i.status === "PARTIAL" || i.status === "OVERDUE")
     .reduce((sum, i) => sum + (i.total - i.payments.reduce((s, p) => s + p.amount, 0)), 0);
-  const paidThisMonth = invoices
-    .filter((i) => i.status !== "CANCELLED")
-    .flatMap((i) => i.payments)
-    .filter((p) => {
-      const now = new Date();
-      return p.paidDate.getMonth() === now.getMonth() && p.paidDate.getFullYear() === now.getFullYear();
-    })
-    .reduce((sum, p) => sum + p.amount, 0);
+  const now = new Date();
+  const revenueThisMonth = paidInvoiceRevenue(
+    invoices,
+    new Date(now.getFullYear(), now.getMonth(), 1),
+    new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  );
 
   return (
     <div>
@@ -58,7 +57,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <StatCard label="Outstanding dues" value={`Rs. ${pendingTotal.toLocaleString("en-IN")}`} />
-        <StatCard label="Collected this month" value={`Rs. ${paidThisMonth.toLocaleString("en-IN")}`} />
+        <StatCard label="Revenue this month" value={`Rs. ${revenueThisMonth.toLocaleString("en-IN")}`} hint="Paid invoices raised this month" />
       </div>
 
       <Card>

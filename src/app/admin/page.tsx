@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardBody, CardHeader, PageHeader, StatCard, EmptyState, Badge, Button } from "@/components/ui";
 import { markStudentFollowUpDone } from "@/lib/actions/student-actions";
 import { subscriptionTotals, countUsedClasses, attendanceForSubscription } from "@/lib/subscription";
+import { paidInvoiceRevenue } from "@/lib/billing";
 import { format } from "date-fns";
 
 // Below this many classes remaining, a subscription counts toward the
@@ -90,10 +91,7 @@ export default async function AdminDashboard() {
     .filter((s) => !s.lastPresent || s.lastPresent < irregularSince)
     .sort((a, b) => (a.lastPresent?.getTime() ?? 0) - (b.lastPresent?.getTime() ?? 0));
 
-  const revenueThisMonth = invoices
-    .flatMap((i) => i.payments)
-    .filter((p) => p.paidDate >= monthStart && p.paidDate < monthEnd)
-    .reduce((sum, p) => sum + p.amount, 0);
+  const revenueThisMonth = paidInvoiceRevenue(invoices, monthStart, monthEnd);
   const outstandingDues = invoices
     .filter((i) => i.status === "PENDING" || i.status === "PARTIAL" || i.status === "OVERDUE")
     .reduce((sum, i) => sum + (i.total - i.payments.reduce((s, p) => s + p.amount, 0)), 0);
@@ -144,7 +142,7 @@ export default async function AdminDashboard() {
         <StatCard label="Active students" value={activeStudents} href="/admin/students?status=ACTIVE" />
         <StatCard label="Renewals due soon" value={renewalsDueSoon} hint={`Fewer than ${LOW_CLASSES_THRESHOLD} classes remaining`} href="/admin/students?renewal=under6" />
         <StatCard label="Classes today" value={todaysBatches.length} href={`/admin/batches?day=${todayCode}`} />
-        <StatCard label="Revenue this month" value={`Rs. ${revenueThisMonth.toLocaleString("en-IN")}`} hint="Payments collected this month" href="/admin/billing" />
+        <StatCard label="Revenue this month" value={`Rs. ${revenueThisMonth.toLocaleString("en-IN")}`} hint="Paid invoices raised this month" href="/admin/billing" />
         <StatCard label="Outstanding dues" value={`Rs. ${outstandingDues.toLocaleString("en-IN")}`} hint="Pending, partial & overdue invoices" href="/admin/billing" />
       </div>
 
