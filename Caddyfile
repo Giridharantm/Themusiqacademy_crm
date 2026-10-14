@@ -6,18 +6,33 @@ crm.themusiqacademy.com {
 # folder (mounted read-only at /srv/musiq-website, see docker-compose.yml).
 # Updating the site is just copying files there; no rebuild or restart.
 themusiqacademy.com {
-	root * /srv/musiq-website
 	encode zstd gzip
-	file_server
 
 	header {
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
 	}
 
-	# CSS/JS aren't fingerprinted, so keep their cache short enough that an edit shows up soon.
-	@static path /assets/* /styles.css /script.js
-	header @static Cache-Control "public, max-age=3600"
+	# The one thing on this domain that reaches the CRM app: the "Book a trial
+	# class" form posts here and the app turns it into a lead. Nothing else on
+	# the app is exposed on this hostname, and only POST is forwarded.
+	@trial {
+		path /api/trial-request
+		method POST
+	}
+	handle @trial {
+		reverse_proxy app:3000
+	}
+
+	handle {
+		root * /srv/musiq-website
+
+		# CSS/JS aren't fingerprinted, so keep their cache short enough that an edit shows up soon.
+		@static path /assets/* /styles.css /script.js /trial/trial.js
+		header @static Cache-Control "public, max-age=3600"
+
+		file_server
+	}
 }
 
 www.themusiqacademy.com {
@@ -26,6 +41,7 @@ www.themusiqacademy.com {
 
 # Look at the site by IP (plain HTTP) before/without DNS pointing here.
 # Marked noindex so a copy served from an IP never competes in search results.
+# (The trial form's submit isn't wired up here — use the real domain for that.)
 http://152.67.172.114 {
 	root * /srv/musiq-website
 	encode zstd gzip
