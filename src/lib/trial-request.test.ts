@@ -70,6 +70,11 @@ describe("looksLikeBot", () => {
     expect(looksLikeBot(null)).toBe(true);
   });
 
+  it("lets a quick autofill-and-tap submit through, but not an instant one", () => {
+    expect(looksLikeBot({ elapsedMs: 1500 })).toBe(false);
+    expect(looksLikeBot({ elapsedMs: 800 })).toBe(true);
+  });
+
   it("lets a normal human-speed submit through", () => {
     expect(looksLikeBot({ elapsedMs: MIN_FILL_MS })).toBe(false);
     expect(looksLikeBot({ elapsedMs: 45000, website: "" })).toBe(false);

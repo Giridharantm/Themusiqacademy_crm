@@ -4,9 +4,12 @@
 
 export const CLASS_FOR_OPTIONS = ["Myself (adult)", "My child (under 18)", "Someone else"] as const;
 
-// A person typing quickly still takes a few seconds to fill four fields; a
-// bot posting straight to the endpoint reports ~0 (or nothing at all).
-export const MIN_FILL_MS = 2500;
+// Bots post straight to the endpoint, so they report ~0 (or no fill time at
+// all). A person using browser autofill and a quick tap can still get a form
+// in well under 2.5s, and silently dropping a real enquiry is far worse than
+// letting an odd spam through (the honeypot and rate limit catch most of
+// that), so the floor is just one second.
+export const MIN_FILL_MS = 1000;
 
 // Indian mobile numbers: accepts "98849 04856", "+91 98849-04856",
 // "091 9884904856", "09884904856" and returns the bare 10 digits (starting
