@@ -471,10 +471,10 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           <Card>
-            <CardHeader title="Guardians, parents & self" subtitle="Adult students can link their own account too" />
+            <CardHeader title="Learner logins" subtitle="Anyone who should see this learner's classes and fees — the student, a parent or a guardian — can have their own login" />
             {student.guardians.length === 0 ? (
               <CardBody>
-                <EmptyState text="No guardian linked yet" />
+                <EmptyState text="No login linked yet" />
               </CardBody>
             ) : (
               <ul className="divide-y divide-slate-100">
@@ -493,20 +493,20 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             )}
             <CardBody className="border-t border-slate-100">
               <form action={addGuardian.bind(null, student.id)} className="space-y-3">
-                <Input label="Guardian name" name="name" required />
+                <Input label="Name" name="name" required />
                 <Input label="Email (used for login)" name="email" type="email" required />
                 <Input label="Phone" name="phone" />
                 <Select label="Relation" name="relation" defaultValue="Mother">
                   <option value="Mother">Mother</option>
                   <option value="Father">Father</option>
                   <option value="Guardian">Guardian</option>
-                  <option value="Self">Self (adult student)</option>
+                  <option value="Self">Student (self)</option>
                 </Select>
                 <p className="text-xs text-slate-400">
-                  For adult students, use &quot;Self&quot; with their own email/phone so they log in directly.
+                  For a student who logs in themselves, use &quot;Student (self)&quot; with their own email/phone.
                   New logins get password &quot;password123&quot; — ask them to sign in and note it down.
                 </p>
-                <Button type="submit" variant="secondary" className="w-full">Link guardian</Button>
+                <Button type="submit" variant="secondary" className="w-full">Add login</Button>
               </form>
             </CardBody>
           </Card>

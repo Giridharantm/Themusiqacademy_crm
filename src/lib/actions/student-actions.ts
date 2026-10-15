@@ -50,7 +50,7 @@ export async function addGuardian(studentId: string, formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim() || null;
   const relation = String(formData.get("relation") ?? "Parent").trim();
 
-  if (!name || !email) throw new Error("Guardian name and email are required");
+  if (!name || !email) throw new Error("Name and email are required");
 
   let user = await prisma.user.findUnique({ where: { email } });
   if (!user) {

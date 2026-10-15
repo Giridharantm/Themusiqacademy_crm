@@ -17,12 +17,12 @@ export default async function ParentDashboard() {
 
   return (
     <div>
-      <PageHeader title="My Children" subtitle="View classes, attendance and fees" />
+      <PageHeader title="My Classes" subtitle="View classes, attendance and fees" />
 
       {links.length === 0 ? (
         <Card>
           <CardBody>
-            <EmptyState text="No students linked to your account yet. Please contact the academy office." />
+            <EmptyState text="No learner profiles are linked to your account yet. Please contact the academy office." />
           </CardBody>
         </Card>
       ) : (
