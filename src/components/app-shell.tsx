@@ -16,9 +16,9 @@ export function AppShell({
     <div className="min-h-screen bg-page print:bg-white">
       <header className="bg-brand border-b border-gold/40 shadow-[0_10px_26px_-18px_rgba(28,26,35,0.7)] print:hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-6 xl:gap-8 min-w-0">
             <BrandLockup />
-            <nav className="hidden sm:flex items-center gap-1">
+            <nav className="hidden xl:flex items-center gap-1">
               {links.map((link) => (
                 <Link
                   key={link.href}
@@ -33,18 +33,18 @@ export function AppShell({
           <div className="flex items-center gap-3">
             <Link
               href="/account"
-              className="text-sm text-page/70 hover:text-page hidden sm:inline px-2 py-1 rounded-md hover:bg-white/10"
+              className="text-sm text-page/70 hover:text-page hidden sm:inline whitespace-nowrap px-2 py-1 rounded-md hover:bg-white/10"
             >
               {userName}
             </Link>
             <form action={logoutAction}>
-              <button className="text-sm text-page/85 hover:text-page px-3 py-1.5 rounded-md hover:bg-white/10">
+              <button className="text-sm text-page/85 hover:text-page whitespace-nowrap px-3 py-1.5 rounded-md hover:bg-white/10">
                 Sign out
               </button>
             </form>
           </div>
         </div>
-        <nav className="sm:hidden flex items-center gap-1 px-4 pb-2 overflow-x-auto">
+        <nav className="xl:hidden flex items-center gap-1 px-1 sm:px-3 pb-2 overflow-x-auto">
           {links.map((link) => (
             <Link
               key={link.href}

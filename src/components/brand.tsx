@@ -8,7 +8,7 @@ import Image from "next/image";
 export function BrandLockup({ large = false }: { large?: boolean }) {
   const size = large ? 64 : 36;
   return (
-    <span className="inline-flex items-center gap-3">
+    <span className="inline-flex shrink-0 items-center gap-3 whitespace-nowrap">
       <Image src={large ? "/logo-emblem-lg.png" : "/logo-emblem.png"} alt="" width={size} height={size} priority />
       <span className="inline-flex flex-col leading-none">
         <span className={`font-display font-bold tracking-[0.04em] text-page ${large ? "text-2xl" : "text-lg"}`}>The Musiq</span>

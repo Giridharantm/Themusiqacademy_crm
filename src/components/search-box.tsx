@@ -8,7 +8,7 @@ export function SearchBox({
   extraParams?: Record<string, string | undefined>;
 }) {
   return (
-    <form method="get" className="flex items-center gap-2 min-w-0">
+    <form method="get" className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
       {extraParams &&
         Object.entries(extraParams)
           .filter(([, v]) => v)
