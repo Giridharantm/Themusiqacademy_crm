@@ -2,7 +2,7 @@
 
 :root {
   --background: #faf7f0;
-  --foreground: #1c1a23;
+  --foreground: #151c2c;
 }
 
 /* Jost sets small next to most sans fonts, so the whole app scales up a touch. */
@@ -16,17 +16,17 @@ html {
   --font-sans: var(--font-jost);
   --font-display: var(--font-cinzel);
 
-  /* Brand theme — shared with the marketing website: charcoal-violet, one */
+  /* Brand theme — shared with the marketing website: deep navy, one */
   /* pink for actions, gold accents, on a soft warm-beige page. */
-  --color-brand: #252232;
-  --color-brand-dark: #1c1a23;
+  --color-brand: #1F283C;
+  --color-brand-dark: #151c2c;
   --color-accent: #d9267d;
   --color-accent-dark: #c01f6d;
   --color-gold: #e5b25d;
   --color-page: #faf7f0;
   --color-panel: #f3eee2;
-  --color-ink: #1c1a23;
-  --color-muted: #5d5a6b;
+  --color-ink: #151c2c;
+  --color-muted: #596176;
   --color-line: #e5ddcb;
 
   /* Retint Tailwind's indigo scale — used for text links, focus rings and */
@@ -42,17 +42,17 @@ html {
 
   /* Retint Tailwind's slate scale — the neutral behind nearly all body text, */
   /* borders and hover backgrounds — to warm beige-biased greys with a */
-  /* charcoal-violet ink, so it reads as one palette with the rest. */
+  /* navy ink, so it reads as one palette with the rest. */
   --color-slate-50: #faf7f0;
   --color-slate-100: #f3eee2;
   --color-slate-200: #e5ddcb;
   --color-slate-300: #d3c9b0;
-  --color-slate-400: #767285;
-  --color-slate-500: #5d5a6b;
-  --color-slate-600: #4b4859;
-  --color-slate-700: #3a3746;
-  --color-slate-800: #2b2935;
-  --color-slate-900: #1c1a23;
+  --color-slate-400: #707a8e;
+  --color-slate-500: #596176;
+  --color-slate-600: #474f63;
+  --color-slate-700: #353d52;
+  --color-slate-800: #262e42;
+  --color-slate-900: #151c2c;
 }
 
 body {
