@@ -12,7 +12,7 @@ export function BrandLockup({ large = false }: { large?: boolean }) {
       <Image src={large ? "/emblem-lg.png" : "/emblem.png"} alt="" width={size} height={size} priority />
       <span className="inline-flex flex-col leading-none">
         <span className={`font-display font-bold tracking-[0.04em] text-page ${large ? "text-2xl" : "text-lg"}`}>The Musiq</span>
-        <span aria-hidden="true" className={`mt-1.5 flex justify-between font-bold uppercase text-gold ${large ? "text-sm" : "text-[0.7rem]"}`}>
+        <span aria-hidden="true" className={`mt-1.5 flex justify-between font-bold uppercase text-page ${large ? "text-sm" : "text-[0.7rem]"}`}>
           {"ACADEMY".split("").map((letter, i) => (
             <span key={i}>{letter}</span>
           ))}
