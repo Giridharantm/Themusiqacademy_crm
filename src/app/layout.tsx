@@ -1,16 +1,17 @@
 import type { Metadata } from "next";
-import { Karla, Fredoka } from "next/font/google";
+import { Jost, Cinzel } from "next/font/google";
 import "./globals.css";
 
-const karla = Karla({
-  variable: "--font-karla",
+const jost = Jost({
+  variable: "--font-jost",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const fredoka = Fredoka({
-  variable: "--font-fredoka",
+const cinzel = Cinzel({
+  variable: "--font-cinzel",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: ["600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -22,7 +23,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${karla.variable} ${fredoka.variable} h-full antialiased`}
+      className={`${jost.variable} ${cinzel.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

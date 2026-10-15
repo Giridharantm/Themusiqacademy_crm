@@ -1,57 +1,63 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fcf6e4;
-  --foreground: #1b1b1b;
+  --background: #faf7f0;
+  --foreground: #1c1a23;
+}
+
+/* Jost sets small next to most sans fonts, so the whole app scales up a touch. */
+html {
+  font-size: 106.25%;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-karla);
-  --font-display: var(--font-fredoka);
+  --font-sans: var(--font-jost);
+  --font-display: var(--font-cinzel);
 
-  /* Vinyl Label theme: a retro record-sleeve palette — deep teal,
-     coral and sunshine yellow on a warm cream "label paper" ground. */
-  --color-vinyl-teal: #0f5257;
-  --color-vinyl-teal-dark: #0b3e42;
-  --color-vinyl-coral: #ff6b35;
-  --color-vinyl-coral-dark: #e0501c;
-  --color-vinyl-sun: #f2b705;
-  --color-vinyl-cream: #fcf6e4;
-  --color-vinyl-paper: #fcefd0;
-  --color-vinyl-ink: #1b1b1b;
-  --color-vinyl-muted: #8a7a52;
-  --color-vinyl-border: #e7dcb8;
+  /* Brand theme — shared with the marketing website: charcoal-violet, one */
+  /* pink for actions, gold accents, on a soft warm-beige page. */
+  --color-brand: #252232;
+  --color-brand-dark: #1c1a23;
+  --color-accent: #d9267d;
+  --color-accent-dark: #c01f6d;
+  --color-gold: #e5b25d;
+  --color-page: #faf7f0;
+  --color-panel: #f3eee2;
+  --color-ink: #1c1a23;
+  --color-muted: #5d5a6b;
+  --color-line: #e5ddcb;
 
-  /* Retint Tailwind's indigo scale so every existing bg-indigo-*/
-  /* text-indigo-* / focus:ring-indigo-* class across the app picks up */
-  /* the vinyl teal accent automatically. */
-  --color-indigo-50: #eaf4f3;
-  --color-indigo-100: #d3e8e6;
-  --color-indigo-300: #8fc4c0;
-  --color-indigo-500: #17767c;
-  --color-indigo-600: #0f5257;
-  --color-indigo-700: #0b3e42;
-  --color-indigo-900: #123234;
+  /* Retint Tailwind's indigo scale — used for text links, focus rings and */
+  /* the odd primary button across the app — to the accent pink. 600 is the */
+  /* link/button shade (5.7:1 on white, 5.2:1 on the page colour). */
+  --color-indigo-50: #fdf0f6;
+  --color-indigo-100: #fadcea;
+  --color-indigo-300: #f0a0c7;
+  --color-indigo-500: #d9267d;
+  --color-indigo-600: #c01f6d;
+  --color-indigo-700: #a31a5c;
+  --color-indigo-900: #5c0f35;
 
-  /* Retint Tailwind's slate scale — the neutral used for nearly all */
-  /* body text, borders and hover backgrounds — from cool blue-grey to */
-  /* a warm cream-biased grey so it reads as one palette with the rest. */
-  --color-slate-50: #fbf3e3;
-  --color-slate-100: #f3e8d2;
-  --color-slate-200: #e7dcb8;
-  --color-slate-300: #d2c39c;
-  --color-slate-400: #a89972;
-  --color-slate-500: #8a7a52;
-  --color-slate-600: #6b5d3e;
-  --color-slate-700: #52472f;
-  --color-slate-800: #362f20;
-  --color-slate-900: #1b1b1b;
+  /* Retint Tailwind's slate scale — the neutral behind nearly all body text, */
+  /* borders and hover backgrounds — to warm beige-biased greys with a */
+  /* charcoal-violet ink, so it reads as one palette with the rest. */
+  --color-slate-50: #faf7f0;
+  --color-slate-100: #f3eee2;
+  --color-slate-200: #e5ddcb;
+  --color-slate-300: #d3c9b0;
+  --color-slate-400: #767285;
+  --color-slate-500: #5d5a6b;
+  --color-slate-600: #4b4859;
+  --color-slate-700: #3a3746;
+  --color-slate-800: #2b2935;
+  --color-slate-900: #1c1a23;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-weight: 500;
 }

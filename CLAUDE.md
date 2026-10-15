@@ -24,7 +24,7 @@ Before considering a change done:
 
 ## Design system
 
-Shared UI primitives are in `src/components/ui.tsx` (`Card`, `Button`, `Badge`, `StatCard`, `Input`, `Select`, `Textarea`, `PageHeader`, `EmptyState`) — reuse these rather than hand-rolling markup. Theme colors are CSS custom properties in `src/app/globals.css`'s `@theme` block (the "vinyl-*" tokens, plus a retint of Tailwind's `indigo`/`slate` scales) — use those tokens, not hardcoded hex values or Tailwind's default palette names.
+Shared UI primitives are in `src/components/ui.tsx` (`Card`, `Button`, `Badge`, `StatCard`, `Input`, `Select`, `Textarea`, `PageHeader`, `EmptyState`) — reuse these rather than hand-rolling markup. Theme colors are CSS custom properties in `src/app/globals.css`'s `@theme` block (the named tokens `brand`, `accent`, `gold`, `page`, `panel`, `ink`, `muted`, `line`, plus a retint of Tailwind's `indigo`/`slate` scales) — use those tokens, not hardcoded hex values or Tailwind's default palette names.
 
 ## Git
 
