@@ -29,7 +29,7 @@ export default async function AdminDashboard() {
     prisma.lead.groupBy({ by: ["status"], _count: true }),
     prisma.student.count({ where: { status: "ACTIVE" } }),
     prisma.subscription.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: "ACTIVE", student: { status: "ACTIVE" } },
       include: { bonusGrants: true, course: true, student: { include: { attendance: true } } },
     }),
     prisma.followUp.findMany({
