@@ -115,6 +115,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                 <option value="WALK_IN">Walk-in</option>
                 <option value="REFERRAL">Referral</option>
                 <option value="ONLINE">Online</option>
+                <option value="WHATSAPP">WhatsApp</option>
                 <option value="OTHER">Other</option>
               </Select>
               <Select label="Interested course" name="interestedCourseId" defaultValue="">

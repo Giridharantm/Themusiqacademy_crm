@@ -30,6 +30,9 @@ services:
     environment:
       DATABASE_URL: postgresql://crm:${POSTGRES_PASSWORD:-crmdevpassword}@db:5432/crm
       AUTH_SECRET: ${AUTH_SECRET}
+      # WhatsApp Cloud API webhook (see README) — leave unset until it is set up.
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
 
   caddy:
     image: caddy:2-alpine

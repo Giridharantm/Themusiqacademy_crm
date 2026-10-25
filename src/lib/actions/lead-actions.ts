@@ -12,7 +12,7 @@ export async function createLead(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim() || null;
-  const source = String(formData.get("source") ?? "OTHER") as "CALL" | "WALK_IN" | "REFERRAL" | "ONLINE" | "OTHER";
+  const source = String(formData.get("source") ?? "OTHER") as "CALL" | "WALK_IN" | "REFERRAL" | "ONLINE" | "WHATSAPP" | "OTHER";
   const interestedCourseId = String(formData.get("interestedCourseId") ?? "") || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
@@ -55,7 +55,7 @@ export async function updateLead(leadId: string, formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim() || null;
-  const source = String(formData.get("source") ?? "OTHER") as "CALL" | "WALK_IN" | "REFERRAL" | "ONLINE" | "OTHER";
+  const source = String(formData.get("source") ?? "OTHER") as "CALL" | "WALK_IN" | "REFERRAL" | "ONLINE" | "WHATSAPP" | "OTHER";
   const interestedCourseId = String(formData.get("interestedCourseId") ?? "") || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
 

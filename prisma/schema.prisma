@@ -18,6 +18,7 @@ enum LeadSource {
   WALK_IN
   REFERRAL
   ONLINE
+  WHATSAPP
   OTHER
 }
 
