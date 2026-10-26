@@ -176,3 +176,48 @@ export function reminderMessage(
 export function istLabel(date: Date): string {
   return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }).format(date);
 }
+
+// ---- who a daily reminder goes to ----------------------------------------
+
+export type ReminderDecision = "SEND" | "CLASS_NOTICE" | "STUDENT_OFF" | "SKIPPED" | "NO_PHONE" | "NO_CONSENT";
+
+// The one place that decides whether a student's reminder for a class goes
+// out — used both by the 10 AM job and by the Reminders page, so what staff
+// see there is exactly what will be sent. First matching reason wins.
+export function reminderDecision(i: {
+  classHasNotice: boolean; // a sent cancel/reschedule/leave notice already covers this class today
+  studentOff: boolean; // reminders turned off for this student
+  skippedToday: boolean; // skipped for this date only
+  phone: string | null;
+  consented: boolean;
+}): ReminderDecision {
+  if (i.classHasNotice) return "CLASS_NOTICE";
+  if (i.studentOff) return "STUDENT_OFF";
+  if (i.skippedToday) return "SKIPPED";
+  if (!i.phone) return "NO_PHONE";
+  if (!i.consented) return "NO_CONSENT";
+  return "SEND";
+}
+
+export const DECISION_LABELS: Record<ReminderDecision, string> = {
+  SEND: "Will be sent",
+  CLASS_NOTICE: "Class cancelled or moved by a notice",
+  STUDENT_OFF: "Reminders turned off for this student",
+  SKIPPED: "Skipped for this day",
+  NO_PHONE: "No valid phone number",
+  NO_CONSENT: "Hasn't agreed to WhatsApp",
+};
+
+const REMINDER_HOUR_IST = 10;
+const OPERATING_WEEKDAYS = new Set([2, 3, 4, 5, 6, 0]); // Tue–Sun (JS getDay); Monday is the holiday
+
+// The date ("YYYY-MM-DD") of the next reminder run that hasn't happened yet:
+// today before 10:00 IST, otherwise the next day — skipping Monday.
+export function nextReminderDateStr(now: Date): string {
+  const hourIst = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hour12: false, timeZone: "Asia/Kolkata" }).format(now)) % 24;
+  const [y, m, d] = istDateString(now).split("-").map(Number);
+  let day = new Date(Date.UTC(y, m - 1, d));
+  if (hourIst >= REMINDER_HOUR_IST) day = new Date(day.getTime() + 86_400_000);
+  while (!OPERATING_WEEKDAYS.has(day.getUTCDay())) day = new Date(day.getTime() + 86_400_000);
+  return day.toISOString().slice(0, 10);
+}

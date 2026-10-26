@@ -14,9 +14,11 @@ import {
   istDateString,
   normalizePhone,
   recipientPhones,
+  reminderDecision,
   reminderMessage,
   shortDateLabel,
   type ClassProgress,
+  type ReminderDecision,
   type NoticeTypeKey,
 } from "@/lib/whatsapp-notices";
 import { sendTemplate, sendText, whatsappConfigured } from "@/lib/whatsapp-send";
@@ -70,6 +72,7 @@ export type ClassRecipient = {
   // Classes completed vs. classes in the student's CURRENT subscription for
   // this instrument (same numbers as the student page); null if they have none.
   progress: ClassProgress | null;
+  remindersOff: boolean;
   phones: { phone: string; consented: boolean }[];
 };
 
@@ -113,6 +116,7 @@ export async function recipientsForBatches(batchIds: string[]): Promise<ClassRec
     startTime: e.batch.startTime,
     teacherName: e.batch.teacher?.name ?? null,
     progress: progressOf(e.studentId, e.batch.courseId),
+    remindersOff: e.student.remindersOff,
     phones: recipientPhones(e.student.guardians.map((g) => g.user.phone), e.student.phone),
   }));
 
@@ -183,46 +187,131 @@ const emptyTally = (): Tally => ({ sent: 0, failed: 0, duplicate: 0, noConsent: 
 
 // ---- the daily reminder run ----------------------------------------------
 
-export type ReminderRun =
-  | { ran: false; reason: string }
-  | ({ ran: true; date: string; classes: number; suppressedBatches: number } & Tally);
+// ---- reminder controls: pause switch, plan, run ----------------------------
 
-// Sends "your class is today" for every class today (India date), unless a
-// sent notice already cancelled or moved that class. Safe to run twice: each
-// message has a unique key, so nobody is messaged twice for the same class.
-export async function runClassReminders(now = new Date()): Promise<ReminderRun> {
-  if (!whatsappConfigured()) return { ran: false, reason: "WhatsApp sending is not configured" };
+export async function getRemindersPaused(): Promise<{ paused: boolean; changedAt: Date | null; changedBy: string | null }> {
+  const row = await prisma.whatsAppSettings.findUnique({ where: { id: "main" } });
+  return { paused: row?.remindersPaused ?? false, changedAt: row?.changedAt ?? null, changedBy: row?.changedBy ?? null };
+}
 
-  const dateStr = istDateString(now);
+export async function setRemindersPaused(paused: boolean, changedBy: string) {
+  await prisma.whatsAppSettings.upsert({
+    where: { id: "main" },
+    create: { id: "main", remindersPaused: paused, changedBy },
+    update: { remindersPaused: paused, changedAt: new Date(), changedBy },
+  });
+}
+
+export type ReminderPlanRow = {
+  key: string; // the unique message key — also what stops a double send
+  studentId: string;
+  studentName: string;
+  batchId: string;
+  courseName: string;
+  startTime: string;
+  teacherName: string | null;
+  progress: ClassProgress | null;
+  remindersOff: boolean;
+  skipped: boolean;
+  phone: string | null;
+  decision: ReminderDecision;
+  // What happened if a reminder for this row has already been tried.
+  sentStatus: "PENDING" | "SENT" | "FAILED" | "DRY_RUN" | null;
+  error: string | null;
+};
+
+export type ReminderPlan = { dateStr: string; isClassDay: boolean; rows: ReminderPlanRow[]; classes: number; noticeBatches: number };
+
+// Everyone who has a class on this date, and for each number whether their
+// reminder will be sent and, if not, why. This is the single source of truth:
+// the 10 AM job sends exactly the rows marked SEND, and the Reminders page
+// shows exactly these rows.
+export async function planReminders(dateStr: string): Promise<ReminderPlan> {
   const date = parseDateOnly(dateStr);
-  if (!OPERATING_DAYS.includes(dayCodeFromDate(date))) return { ran: false, reason: "No classes today (Monday holiday)" };
+  if (!OPERATING_DAYS.includes(dayCodeFromDate(date))) return { dateStr, isClassDay: false, rows: [], classes: 0, noticeBatches: 0 };
 
   const suppressedTypes = (Object.keys(NOTICE_TYPES) as NoticeTypeKey[]).filter((t) => NOTICE_TYPES[t].suppressesReminder);
   const notices = await prisma.notice.findMany({ where: { date, sentAt: { not: null }, type: { in: suppressedTypes } }, select: { batchIds: true } });
-  const suppressed = new Set(notices.flatMap((n) => n.batchIds));
+  const noticeBatches = new Set(notices.flatMap((n) => n.batchIds));
 
-  const batches = (await batchesOnDate(date)).filter((b) => !suppressed.has(b.id));
+  const batches = await batchesOnDate(date);
   const recipients = await recipientsForBatches(batches.map((b) => b.id));
+  const skips = await prisma.reminderSkip.findMany({ where: { date, studentId: { in: recipients.map((r) => r.studentId) } }, select: { studentId: true } });
+  const skipped = new Set(skips.map((k) => k.studentId));
 
-  const tally = emptyTally();
+  const rows: ReminderPlanRow[] = [];
   for (const r of recipients) {
-    for (const { phone, consented } of r.phones) {
-      if (!consented) {
-        tally.noConsent++;
-        continue;
-      }
-      const outcome = await sendLogged({
-        kind: "REMINDER",
-        phone,
+    const numbers = r.phones.length > 0 ? r.phones : [{ phone: null as string | null, consented: false }];
+    for (const { phone, consented } of numbers) {
+      rows.push({
+        key: `reminder:${dateStr}:${r.studentId}:${r.batchId}:${phone ?? "none"}`,
         studentId: r.studentId,
-        ...reminderMessage(r, r.progress),
-        summary: `${r.courseName} ${clockLabel(r.startTime)} · ${r.studentName}`,
-        dedupeKey: `reminder:${dateStr}:${r.studentId}:${r.batchId}:${phone}`,
+        studentName: r.studentName,
+        batchId: r.batchId,
+        courseName: r.courseName,
+        startTime: r.startTime,
+        teacherName: r.teacherName,
+        progress: r.progress,
+        remindersOff: r.remindersOff,
+        skipped: skipped.has(r.studentId),
+        phone,
+        decision: reminderDecision({
+          classHasNotice: noticeBatches.has(r.batchId),
+          studentOff: r.remindersOff,
+          skippedToday: skipped.has(r.studentId),
+          phone,
+          consented,
+        }),
+        sentStatus: null,
+        error: null,
       });
-      tally[outcome]++;
     }
   }
-  return { ran: true, date: dateStr, classes: batches.length, suppressedBatches: suppressed.size, ...tally };
+
+  const tried = await prisma.whatsAppMessage.findMany({ where: { dedupeKey: { in: rows.map((r) => r.key) } }, select: { dedupeKey: true, status: true, error: true } });
+  const byKey = new Map(tried.map((m) => [m.dedupeKey, m]));
+  for (const row of rows) {
+    const m = byKey.get(row.key);
+    if (m && m.status !== "RECEIVED") {
+      row.sentStatus = m.status as ReminderPlanRow["sentStatus"];
+      row.error = m.error;
+    }
+  }
+  return { dateStr, isClassDay: true, rows, classes: batches.length, noticeBatches: noticeBatches.size };
+}
+
+export type ReminderRun =
+  | { ran: false; reason: string }
+  | ({ ran: true; date: string; classes: number; excluded: number } & Tally);
+
+// Sends "your class is today" for every class today (India date) that the plan
+// marks SEND. Does nothing while reminders are paused. Safe to run twice: each
+// message has a unique key, so nobody is messaged twice for the same class.
+export async function runClassReminders(now = new Date()): Promise<ReminderRun> {
+  if (!whatsappConfigured()) return { ran: false, reason: "WhatsApp sending is not configured" };
+  if ((await getRemindersPaused()).paused) return { ran: false, reason: "Reminders are paused" };
+
+  const dateStr = istDateString(now);
+  const plan = await planReminders(dateStr);
+  if (!plan.isClassDay) return { ran: false, reason: "No classes today (Monday holiday)" };
+
+  const tally = emptyTally();
+  let excluded = 0;
+  for (const row of plan.rows) {
+    if (row.decision === "NO_CONSENT") tally.noConsent++;
+    else if (row.decision !== "SEND") excluded++;
+    if (row.decision !== "SEND" || !row.phone) continue;
+    const outcome = await sendLogged({
+      kind: "REMINDER",
+      phone: row.phone,
+      studentId: row.studentId,
+      ...reminderMessage(row, row.progress),
+      summary: `${row.courseName} ${clockLabel(row.startTime)} · ${row.studentName}`,
+      dedupeKey: row.key,
+    });
+    tally[outcome]++;
+  }
+  return { ran: true, date: dateStr, classes: plan.classes, excluded, ...tally };
 }
 
 // ---- ad hoc notices -------------------------------------------------------

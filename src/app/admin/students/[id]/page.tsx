@@ -22,7 +22,7 @@ import {
   deleteSubscription,
 } from "@/lib/actions/subscription-actions";
 import { markAttendanceOnDateAsAdmin, removeAttendanceOnDateAsAdmin } from "@/lib/actions/attendance-actions";
-import { setPhoneConsent } from "@/lib/actions/whatsapp-actions";
+import { setPhoneConsent, setStudentRemindersOff } from "@/lib/actions/whatsapp-actions";
 import { recipientPhones } from "@/lib/whatsapp-notices";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Input, Select, Textarea, Button, EmptyState } from "@/components/ui";
 import { SubscriptionProgress } from "@/components/subscription-progress";
@@ -524,6 +524,17 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
               title="WhatsApp reminders"
               subtitle="Class reminders and notices go to the parent or guardian's number (or the student's own, if there is none). A family agrees by messaging 70901 20000 — or tick it here if they agreed in person or on a form."
             />
+            <CardBody className="border-b border-slate-100 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-slate-900">Daily 10:00 AM class reminder</p>
+                <p className="text-xs text-slate-500">{student.remindersOff ? "Turned off for this student" : "On — sent on class days if the number has agreed"}</p>
+              </div>
+              <form action={setStudentRemindersOff.bind(null, student.id, !student.remindersOff)}>
+                <Button type="submit" variant="ghost">
+                  {student.remindersOff ? "Turn on" : "Turn off"}
+                </Button>
+              </form>
+            </CardBody>
             {whatsappPhones.length === 0 ? (
               <CardBody>
                 <EmptyState text="No valid phone number on file" />

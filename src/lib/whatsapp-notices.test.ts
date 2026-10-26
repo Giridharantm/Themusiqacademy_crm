@@ -3,6 +3,9 @@ import {
   NOTICE_TYPES,
   istDateString,
   istLabel,
+  reminderDecision,
+  DECISION_LABELS,
+  nextReminderDateStr,
   shortDateLabel,
   clockLabel,
   sanitizeParam,
@@ -166,5 +169,39 @@ describe("istLabel", () => {
   it("shows India time regardless of the server's time zone", () => {
     expect(istLabel(new Date("2026-10-27T11:11:00Z"))).toMatch(/27 Oct.*4:41\s?pm/i);
     expect(istLabel(new Date("2026-10-26T20:00:00Z"))).toMatch(/27 Oct.*1:30\s?am/i);
+  });
+});
+
+describe("reminderDecision", () => {
+  const base = { classHasNotice: false, studentOff: false, skippedToday: false, phone: "9845708094", consented: true };
+
+  it("sends when nothing stops it", () => {
+    expect(reminderDecision(base)).toBe("SEND");
+  });
+
+  it("applies the first matching reason, in order", () => {
+    expect(reminderDecision({ ...base, classHasNotice: true, studentOff: true, consented: false })).toBe("CLASS_NOTICE");
+    expect(reminderDecision({ ...base, studentOff: true, skippedToday: true })).toBe("STUDENT_OFF");
+    expect(reminderDecision({ ...base, skippedToday: true, phone: null })).toBe("SKIPPED");
+    expect(reminderDecision({ ...base, phone: null, consented: false })).toBe("NO_PHONE");
+    expect(reminderDecision({ ...base, consented: false })).toBe("NO_CONSENT");
+  });
+
+  it("has a label for every decision", () => {
+    for (const d of ["SEND", "CLASS_NOTICE", "STUDENT_OFF", "SKIPPED", "NO_PHONE", "NO_CONSENT"] as const) expect(DECISION_LABELS[d]).toBeTruthy();
+  });
+});
+
+describe("nextReminderDateStr", () => {
+  it("is today before 10:00 India time and tomorrow after it", () => {
+    expect(nextReminderDateStr(new Date("2026-10-27T03:00:00Z"))).toBe("2026-10-27"); // Tue 08:30 IST
+    expect(nextReminderDateStr(new Date("2026-10-27T04:29:00Z"))).toBe("2026-10-27"); // Tue 09:59 IST
+    expect(nextReminderDateStr(new Date("2026-10-27T04:30:00Z"))).toBe("2026-10-28"); // Tue 10:00 IST -> Wed
+  });
+
+  it("skips Monday, the holiday", () => {
+    expect(nextReminderDateStr(new Date("2026-10-25T12:00:00Z"))).toBe("2026-10-27"); // Sun evening -> Tue
+    expect(nextReminderDateStr(new Date("2026-10-26T05:00:00Z"))).toBe("2026-10-27"); // Mon -> Tue
+    expect(nextReminderDateStr(new Date("2026-10-26T22:00:00Z"))).toBe("2026-10-27"); // Mon 03:30 IST Tue is today
   });
 });

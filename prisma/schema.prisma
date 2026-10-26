@@ -186,6 +186,9 @@ model Student {
   address    String?
   joinDate   DateTime @default(now())
   status     String   @default("ACTIVE") // ACTIVE / INACTIVE
+  // The daily WhatsApp class reminder is skipped for this student when true
+  // (notices about a cancelled or moved class still go out).
+  remindersOff Boolean @default(false)
   leadId     String?  @unique
   lead       Lead?    @relation(fields: [leadId], references: [id])
   createdAt  DateTime @default(now())
@@ -197,6 +200,7 @@ model Student {
   subscriptions Subscription[]
   attendance    Attendance[]
   followUps     StudentFollowUp[]
+  reminderSkips ReminderSkip[]
 }
 
 model StudentGuardian {
@@ -446,4 +450,24 @@ model WhatsAppMessage {
 
   @@index([createdAt])
   @@index([phone, createdAt])
+}
+
+// "Don't send this student's reminder on this date" — one-off, set from the
+// Reminders page.
+model ReminderSkip {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date      DateTime // the class date (date-only)
+  createdAt DateTime @default(now())
+
+  @@unique([studentId, date])
+}
+
+// One row ("main"): the master switch for the daily 10:00 reminder.
+model WhatsAppSettings {
+  id              String   @id @default("main")
+  remindersPaused Boolean  @default(false)
+  changedAt       DateTime @default(now())
+  changedBy       String? // name of the admin who last paused or resumed
 }
