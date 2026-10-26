@@ -12,13 +12,17 @@ export function AppShell({
   links: { href: string; label: string }[];
   children: ReactNode;
 }) {
+  // The single-row desktop menu only has room for about nine links next to the
+  // logo and the user's name; a longer menu (the admin's) goes on its own row
+  // under them instead of overlapping.
+  const stacked = links.length > 9;
   return (
     <div className="min-h-screen bg-page print:bg-white">
       <header className="bg-brand border-b border-gold/40 shadow-[0_10px_26px_-18px_rgba(28,26,35,0.7)] print:hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
           <div className="flex items-center gap-6 xl:gap-8 min-w-0">
             <BrandLockup />
-            <nav className="hidden xl:flex items-center gap-1">
+            <nav className={`${stacked ? "hidden" : "hidden xl:flex"} items-center gap-1`}>
               {links.map((link) => (
                 <Link
                   key={link.href}
@@ -44,7 +48,9 @@ export function AppShell({
             </form>
           </div>
         </div>
-        <nav className="xl:hidden flex items-center gap-1 px-1 sm:px-3 pb-2 overflow-x-auto">
+        <nav
+          className={`${stacked ? "max-w-6xl mx-auto w-full px-1 sm:px-4 xl:flex-wrap xl:overflow-visible" : "xl:hidden px-1 sm:px-3"} flex items-center gap-1 pb-2 overflow-x-auto`}
+        >
           {links.map((link) => (
             <Link
               key={link.href}
