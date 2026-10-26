@@ -22,6 +22,8 @@ import {
   deleteSubscription,
 } from "@/lib/actions/subscription-actions";
 import { markAttendanceOnDateAsAdmin, removeAttendanceOnDateAsAdmin } from "@/lib/actions/attendance-actions";
+import { setPhoneConsent } from "@/lib/actions/whatsapp-actions";
+import { recipientPhones } from "@/lib/whatsapp-notices";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Input, Select, Textarea, Button, EmptyState } from "@/components/ui";
 import { SubscriptionProgress } from "@/components/subscription-progress";
 import { SubscriptionFormFields } from "@/components/subscription-form-fields";
@@ -74,6 +76,12 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const pendingFollowUps = student.followUps.filter((f) => !f.done);
 
   const batches = await prisma.batch.findMany({ include: { course: true }, orderBy: { name: "asc" } });
+
+  // Who WhatsApp class messages for this student go to, and whether each
+  // number has agreed (consent is per phone number).
+  const whatsappPhones = recipientPhones(student.guardians.map((g) => g.user.phone), student.phone);
+  const whatsappContacts = await prisma.whatsAppContact.findMany({ where: { phone: { in: whatsappPhones } } });
+  const whatsappConsent = new Map(whatsappContacts.map((c) => [c.phone, c]));
 
   const enrolledBatchIds = new Set(student.enrollments.map((e) => e.batchId));
   const enrolledCourseIds = new Set(student.enrollments.map((e) => e.batch.courseId));
@@ -509,6 +517,47 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                 <Button type="submit" variant="secondary" className="w-full">Add login</Button>
               </form>
             </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="WhatsApp reminders"
+              subtitle="Class reminders and notices go to the parent or guardian's number (or the student's own, if there is none). A family agrees by messaging 70901 20000 — or tick it here if they agreed in person or on a form."
+            />
+            {whatsappPhones.length === 0 ? (
+              <CardBody>
+                <EmptyState text="No valid phone number on file" />
+              </CardBody>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {whatsappPhones.map((phone) => {
+                  const contact = whatsappConsent.get(phone);
+                  const agreed = !!contact?.optedIn;
+                  return (
+                    <li key={phone} className="px-5 py-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{phone}</p>
+                        <p className="text-xs text-slate-500">
+                          {agreed
+                            ? `Agreed${contact?.optedInAt ? " " + format(contact.optedInAt, "d MMM yyyy") : ""} · ${contact?.source === "admin" ? "recorded by staff" : "messaged us"}`
+                            : contact?.optedOutAt
+                              ? `Stopped ${format(contact.optedOutAt, "d MMM yyyy")}`
+                              : "Hasn't agreed yet"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge color={agreed ? "green" : "slate"}>{agreed ? "Gets reminders" : "No reminders"}</Badge>
+                        <form action={setPhoneConsent.bind(null, student.id, phone, !agreed)}>
+                          <Button type="submit" variant="ghost">
+                            {agreed ? "Turn off" : "Record consent"}
+                          </Button>
+                        </form>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </Card>
         </div>
       </div>

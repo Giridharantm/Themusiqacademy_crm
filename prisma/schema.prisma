@@ -359,3 +359,82 @@ model Payment {
   paidDate  DateTime      @default(now())
   note      String?
 }
+
+// ---- WhatsApp class reminders & notices --------------------------------
+
+// Consent is per phone number, not per student: a parent's number is shared
+// by siblings, and WhatsApp (and our privacy page) is about the number. A
+// number only gets reminders/notices once it is opted in — by messaging us
+// first, or by an admin recording consent given in person or on a form.
+model WhatsAppContact {
+  phone      String    @id // 10 digits for Indian numbers, "+<digits>" otherwise (as stored across the CRM)
+  optedIn    Boolean   @default(false)
+  optedInAt  DateTime?
+  optedOutAt DateTime?
+  source     String? // "whatsapp-reply" | "admin"
+  updatedAt  DateTime  @updatedAt
+}
+
+enum NoticeType {
+  TEACHER_LEAVE
+  TEACHER_LATE
+  RESCHEDULE
+  CLASS_CANCELLED
+  ACADEMY_LEAVE
+  OTHER
+}
+
+// An ad hoc message to the students of some classes on one date — a teacher
+// on leave, running late, a rescheduled batch, an academy closure. The
+// batches are resolved and stored when it is sent, so the record shows who it
+// went to even if batches change later.
+model Notice {
+  id             String     @id @default(cuid())
+  type           NoticeType
+  date           DateTime // the class date the notice is about (date-only)
+  batchIds       String[]
+  message        String // the text sent (for RESCHEDULE: a free note; the old/new slots are in the fields below)
+  newDate        DateTime? // RESCHEDULE only
+  newStartTime   String? // RESCHEDULE only, e.g. "18:00"
+  createdById    String?
+  createdAt      DateTime   @default(now())
+  sentAt         DateTime?
+  recipientCount Int        @default(0)
+
+  messages WhatsAppMessage[]
+}
+
+enum WhatsAppMessageKind {
+  REMINDER
+  NOTICE
+  REPLY
+}
+
+enum WhatsAppMessageStatus {
+  PENDING
+  SENT
+  FAILED
+  DRY_RUN
+}
+
+// One row per message we try to send; also what makes the daily reminder job
+// safe to re-run (dedupeKey is unique), and what an admin reads to see what
+// was sent and what failed.
+model WhatsAppMessage {
+  id          String                @id @default(cuid())
+  kind        WhatsAppMessageKind
+  phone       String
+  studentId   String?
+  noticeId    String?
+  notice      Notice?               @relation(fields: [noticeId], references: [id], onDelete: SetNull)
+  template    String
+  summary     String? // human-readable, e.g. "Guitar 5:00 PM"
+  status      WhatsAppMessageStatus @default(PENDING)
+  error       String?
+  waMessageId String?
+  dedupeKey   String                @unique
+  createdAt   DateTime              @default(now())
+  sentAt      DateTime?
+
+  @@index([createdAt])
+}

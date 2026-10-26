@@ -9,6 +9,8 @@ import {
   createSeenIds,
   summarizeWebhook,
 } from "@/lib/whatsapp";
+import { isStartMessage, isStopMessage } from "@/lib/whatsapp-notices";
+import { findStudentOrUserByPhone, recordInboundConsent, sendReply, setConsent } from "@/lib/whatsapp-service";
 
 // Receiver for Meta's WhatsApp Cloud API webhook. Meta calls GET once to
 // verify the URL when it is saved in the app's Webhooks settings, then POSTs
@@ -60,14 +62,25 @@ export async function POST(request: NextRequest) {
     const phone = leadPhoneFromWhatsApp(msg.from);
     const note = whatsappNote(msg.text, now);
 
+    // STOP / START switch class messages off and on for this number, and are
+    // confirmed with a short reply. Whoever sends them, student or not.
+    if (isStopMessage(msg.text)) {
+      await setConsent(phone, false, "whatsapp-reply");
+      await sendReply(phone, "You will no longer get class messages from The Musiq Academy on WhatsApp. Send START any time to turn them back on.", msg.id);
+      continue;
+    }
+    if (isStartMessage(msg.text)) {
+      await setConsent(phone, true, "whatsapp-reply");
+      await sendReply(phone, "Thank you! You will get class reminders and updates from The Musiq Academy on WhatsApp. Send STOP any time to turn them off.", msg.id);
+      continue;
+    }
+
     // Someone already enrolled (or a student's parent) writing in is not a
-    // new enquiry — don't turn them into a lead.
-    const [student, user] = await Promise.all([
-      prisma.student.findFirst({ where: { phone }, select: { id: true } }),
-      prisma.user.findFirst({ where: { phone }, select: { id: true } }),
-    ]);
-    if (student || user) {
-      console.log("[whatsapp] message skipped: sender is an existing student or user");
+    // new enquiry — don't turn them into a lead. Their message does count as
+    // agreeing to class reminders and updates on this number.
+    if (await findStudentOrUserByPhone(phone)) {
+      await recordInboundConsent(phone);
+      console.log("[whatsapp] message from an existing student or user: recorded as consent, no lead");
       continue;
     }
 

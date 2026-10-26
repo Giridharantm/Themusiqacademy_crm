@@ -33,6 +33,10 @@ services:
       # WhatsApp Cloud API webhook (see README) — leave unset until it is set up.
       WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
       WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+      # Sending class reminders / notices (see README "WhatsApp class reminders").
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      CRON_SECRET: ${CRON_SECRET:-}
 
   caddy:
     image: caddy:2-alpine
