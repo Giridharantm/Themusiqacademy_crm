@@ -8,6 +8,7 @@ import {
   whatsappNote,
   createSeenIds,
   summarizeWebhook,
+  parseStatusUpdates,
 } from "@/lib/whatsapp";
 import { isStartMessage, isStopMessage } from "@/lib/whatsapp-notices";
 import { findStudentOrUserByPhone, recordInboundConsent, sendReply, setConsent } from "@/lib/whatsapp-service";
@@ -53,6 +54,22 @@ export async function POST(request: NextRequest) {
   // No message text or numbers here — just enough to tell "Meta never called"
   // from "Meta called but the payload wasn't what we expected".
   console.log(`[whatsapp] webhook received: ${summarizeWebhook(payload)} parsed=${inbound.length}`);
+
+  // Receipts for messages we sent: WhatsApp accepts a send first and can still
+  // fail it afterwards, so a failure is written back onto the message log row
+  // (with Meta's reason) instead of leaving it looking "sent".
+  for (const s of parseStatusUpdates(payload)) {
+    if (s.status !== "failed") {
+      console.log(`[whatsapp] message ${s.status}`);
+      continue;
+    }
+    console.warn(`[whatsapp] message FAILED: code=${s.errorCode} title=${s.errorTitle} detail=${s.errorDetail}`);
+    await prisma.whatsAppMessage.updateMany({
+      where: { waMessageId: s.id },
+      data: { status: "FAILED", error: [s.errorCode, s.errorTitle, s.errorDetail].filter(Boolean).join(" · ").slice(0, 400) || "Delivery failed" },
+    });
+    revalidatePath("/admin/whatsapp");
+  }
 
   const now = new Date();
   let changed = false;

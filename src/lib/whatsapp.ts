@@ -133,3 +133,43 @@ export function summarizeWebhook(payload: unknown): string {
   }
   return `object=${String(root.object)} fields=[${fields.join(",")}] messages=${messages} statuses=${statuses} messageKeys=[${messageKeys.join(",")}]`;
 }
+
+export type StatusUpdate = {
+  id: string; // the wamid we got back when sending
+  status: string; // sent | delivered | read | failed
+  errorCode: number | null;
+  errorTitle: string | null;
+  errorDetail: string | null;
+};
+
+// Delivery receipts for messages WE sent. WhatsApp accepts a send first and
+// can still fail it afterwards (not on WhatsApp, blocked, re-engagement
+// window…), and only these callbacks say so.
+export function parseStatusUpdates(payload: unknown): StatusUpdate[] {
+  const out: StatusUpdate[] = [];
+  const root = asRecord(payload);
+  if (!root || root.object !== "whatsapp_business_account" || !Array.isArray(root.entry)) return out;
+  for (const entry of root.entry) {
+    const changes = asRecord(entry)?.changes;
+    if (!Array.isArray(changes)) continue;
+    for (const change of changes) {
+      const c = asRecord(change);
+      if (c?.field !== "messages") continue;
+      const statuses = asRecord(c.value)?.statuses;
+      if (!Array.isArray(statuses)) continue;
+      for (const s of statuses) {
+        const st = asRecord(s);
+        if (!st || typeof st.id !== "string" || typeof st.status !== "string") continue;
+        const err = Array.isArray(st.errors) ? asRecord(st.errors[0]) : null;
+        out.push({
+          id: st.id,
+          status: st.status,
+          errorCode: typeof err?.code === "number" ? err.code : null,
+          errorTitle: typeof err?.title === "string" ? err.title : typeof err?.message === "string" ? err.message : null,
+          errorDetail: typeof asRecord(err?.error_data)?.details === "string" ? (asRecord(err?.error_data)!.details as string) : null,
+        });
+      }
+    }
+  }
+  return out;
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createHmac } from "node:crypto";
-import { verifySignature, parseInboundMessages, leadPhoneFromWhatsApp, whatsappNote, createSeenIds, summarizeWebhook } from "./whatsapp";
+import { verifySignature, parseInboundMessages, leadPhoneFromWhatsApp, whatsappNote, createSeenIds, summarizeWebhook, parseStatusUpdates } from "./whatsapp";
 
 const sign = (body: string, secret: string) => "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
 
@@ -107,5 +107,32 @@ describe("summarizeWebhook", () => {
   it("copes with junk", () => {
     expect(summarizeWebhook(null)).toBe("not-an-object");
     expect(summarizeWebhook({ object: "x" })).toBe("object=x fields=[] messages=0 statuses=0 messageKeys=[]");
+  });
+});
+
+describe("parseStatusUpdates", () => {
+  const wrap = (statuses: unknown[]) => ({
+    object: "whatsapp_business_account",
+    entry: [{ changes: [{ field: "messages", value: { statuses } }] }],
+  });
+
+  it("reads delivery receipts and failure reasons", () => {
+    expect(
+      parseStatusUpdates(
+        wrap([
+          { id: "wamid.A", status: "delivered", recipient_id: "919845708094" },
+          { id: "wamid.B", status: "failed", errors: [{ code: 131026, title: "Message undeliverable", error_data: { details: "Not a WhatsApp user" } }] },
+        ])
+      )
+    ).toEqual([
+      { id: "wamid.A", status: "delivered", errorCode: null, errorTitle: null, errorDetail: null },
+      { id: "wamid.B", status: "failed", errorCode: 131026, errorTitle: "Message undeliverable", errorDetail: "Not a WhatsApp user" },
+    ]);
+  });
+
+  it("ignores junk and customer messages", () => {
+    expect(parseStatusUpdates(null)).toEqual([]);
+    expect(parseStatusUpdates(wrap([{ status: "sent" }, 5]))).toEqual([]);
+    expect(parseStatusUpdates(payload({ messages: [{ id: "a", from: "1", type: "text" }] }))).toEqual([]);
   });
 });
