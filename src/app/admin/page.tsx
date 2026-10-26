@@ -4,6 +4,7 @@ import { Card, CardBody, CardHeader, PageHeader, StatCard, EmptyState, Badge, Bu
 import { markStudentFollowUpDone } from "@/lib/actions/student-actions";
 import { subscriptionTotals, countUsedClasses, attendanceForSubscription } from "@/lib/subscription";
 import { paidInvoiceRevenue } from "@/lib/billing";
+import { unreadConversationCount } from "@/lib/whatsapp-service";
 import { format } from "date-fns";
 
 // Below this many classes remaining, a subscription counts toward the
@@ -25,7 +26,7 @@ export default async function AdminDashboard() {
   const todayDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayCode = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][now.getDay()];
 
-  const [leadCounts, activeStudents, activeSubscriptions, upcomingFollowUps, studentCallbacksDue, todaysBatches, invoices] = await Promise.all([
+  const [leadCounts, activeStudents, activeSubscriptions, upcomingFollowUps, studentCallbacksDue, todaysBatches, invoices, unreadWhatsApp] = await Promise.all([
     prisma.lead.groupBy({ by: ["status"], _count: true }),
     prisma.student.count({ where: { status: "ACTIVE" } }),
     prisma.subscription.findMany({
@@ -49,6 +50,7 @@ export default async function AdminDashboard() {
     }),
     prisma.batch.findMany({ where: { dayOfWeek: todayCode }, include: { course: true, teacher: true } }),
     prisma.invoice.findMany({ where: { status: { not: "CANCELLED" } }, include: { payments: true } }),
+    unreadConversationCount(),
   ]);
 
   const leadCountByStatus = Object.fromEntries(leadCounts.map((l) => [l.status, l._count]));
@@ -136,6 +138,18 @@ export default async function AdminDashboard() {
   return (
     <div>
       <PageHeader title="Dashboard" subtitle="Overview of leads, students and billing" />
+
+      {unreadWhatsApp > 0 && (
+        <Link
+          href="/admin/whatsapp/inbox"
+          className="mb-4 flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 hover:bg-emerald-100"
+        >
+          <span>
+            <strong>{unreadWhatsApp}</strong> WhatsApp conversation{unreadWhatsApp === 1 ? "" : "s"} waiting for a reply
+          </span>
+          <span className="text-emerald-700">Open inbox →</span>
+        </Link>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <StatCard label="Open leads" value={totalOpenLeads} hint={leadsHint} href="/admin/leads?status=open" />

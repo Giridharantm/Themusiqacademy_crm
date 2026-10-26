@@ -171,3 +171,8 @@ export function reminderMessage(
   if (!progress || progress.total <= 0) return { template: TEMPLATE_REMINDER, params: base };
   return { template: TEMPLATE_REMINDER_PROGRESS, params: [...base, String(Math.max(0, progress.used)), String(progress.total)] };
 }
+
+// "27 Oct, 4:41 pm" in India time, whatever time zone the server runs in.
+export function istLabel(date: Date): string {
+  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }).format(date);
+}

@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/authz";
-import { createAndSendNotice, setConsent } from "@/lib/whatsapp-service";
+import { createAndSendNotice, markConversationRead, sendConversationReply, setConsent } from "@/lib/whatsapp-service";
 import { isNoticeType, normalizePhone } from "@/lib/whatsapp-notices";
 
 // Sends an ad hoc notice to the opted-in families of the chosen classes. The
@@ -43,4 +43,29 @@ export async function setPhoneConsent(studentId: string, phone: string, optedIn:
   await setConsent(normalized, optedIn, "admin");
   revalidatePath(`/admin/students/${studentId}`);
   revalidatePath("/admin/whatsapp");
+}
+
+// Staff reply from the inbox. Free text goes out in the academy's name, and
+// only inside WhatsApp's 24-hour reply window; the page re-renders with the
+// reason if WhatsApp (or the window rule) refuses it.
+export async function sendInboxReply(formData: FormData) {
+  await requireRole("ADMIN");
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
+  if (!phone) throw new Error("That phone number is not valid");
+
+  const result = await sendConversationReply(phone, String(formData.get("text") ?? ""));
+  revalidatePath("/admin/whatsapp/inbox");
+  const q = new URLSearchParams({ phone });
+  if (!result.ok) q.set("error", result.error);
+  redirect(`/admin/whatsapp/inbox?${q.toString()}`);
+}
+
+// Called when a conversation is opened, so the unread badge clears.
+export async function markInboxRead(phone: string) {
+  await requireRole("ADMIN");
+  const normalized = normalizePhone(phone);
+  if (!normalized) return;
+  await markConversationRead(normalized);
+  revalidatePath("/admin/whatsapp/inbox");
+  revalidatePath("/admin");
 }

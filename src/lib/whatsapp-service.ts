@@ -1,6 +1,7 @@
 // The database side of WhatsApp class reminders and notices: who a message
 // goes to, consent, the daily 10:00 reminder run, and ad hoc notices. The
 // pure rules are in whatsapp-notices.ts; the HTTP call is in whatsapp-send.ts.
+import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/attendance";
@@ -11,6 +12,7 @@ import {
   TEMPLATE_RESCHEDULED,
   clockLabel,
   istDateString,
+  normalizePhone,
   recipientPhones,
   reminderMessage,
   shortDateLabel,
@@ -18,6 +20,7 @@ import {
   type NoticeTypeKey,
 } from "@/lib/whatsapp-notices";
 import { sendTemplate, sendText, whatsappConfigured } from "@/lib/whatsapp-send";
+import { cleanReplyText, isReplyWindowOpen, isUnread } from "@/lib/whatsapp-inbox";
 import { attendanceForSubscription, countUsedClasses, subscriptionTotals } from "@/lib/subscription";
 
 // ---- consent --------------------------------------------------------------
@@ -290,7 +293,7 @@ export async function createAndSendNotice(input: NoticeInput): Promise<{ noticeI
 export async function sendReply(phone: string, text: string, key: string) {
   try {
     const row = await prisma.whatsAppMessage.create({
-      data: { kind: "REPLY", phone, template: "text", summary: text.slice(0, 80), dedupeKey: `reply:${key}` },
+      data: { kind: "REPLY", phone, template: "text", body: text, summary: text.slice(0, 80), dedupeKey: `reply:${key}` },
     });
     const result = await sendText(phone, text);
     await prisma.whatsAppMessage.update({
@@ -304,4 +307,125 @@ export async function sendReply(phone: string, text: string, key: string) {
     // must never break handling of the webhook.
     console.warn("[whatsapp] reply not sent:", e instanceof Error ? e.message : e);
   }
+}
+
+// ---- inbox ----------------------------------------------------------------
+
+// Stores a message from a family or enquirer and marks their conversation
+// unread. Returns false when this exact message was already stored (Meta
+// re-sends a webhook it didn't get a quick 200 for), so nothing downstream
+// runs twice.
+export async function recordInbound(msg: { id: string; phone: string; name: string | null; text: string; at: Date | null }): Promise<boolean> {
+  const when = msg.at ?? new Date();
+  try {
+    await prisma.whatsAppMessage.create({
+      data: {
+        kind: "INBOUND",
+        phone: msg.phone,
+        template: "inbound",
+        body: msg.text,
+        summary: msg.text.slice(0, 80),
+        status: "RECEIVED",
+        waMessageId: msg.id,
+        dedupeKey: `in:${msg.id}`,
+        createdAt: when,
+      },
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return false;
+    throw e;
+  }
+  const existing = await prisma.whatsAppContact.findUnique({ where: { phone: msg.phone }, select: { lastInboundAt: true } });
+  const newest = existing?.lastInboundAt && existing.lastInboundAt > when ? existing.lastInboundAt : when;
+  await prisma.whatsAppContact.upsert({
+    where: { phone: msg.phone },
+    create: { phone: msg.phone, name: msg.name, lastInboundAt: newest },
+    update: { name: msg.name ?? undefined, lastInboundAt: newest },
+  });
+  return true;
+}
+
+export async function markConversationRead(phone: string) {
+  await prisma.whatsAppContact.updateMany({ where: { phone, lastInboundAt: { not: null } }, data: { lastReadAt: new Date() } });
+}
+
+export async function unreadConversationCount(): Promise<number> {
+  const rows = await prisma.$queryRaw<{ n: bigint }[]>`
+    select count(*) as n from "WhatsAppContact"
+    where "lastInboundAt" is not null and ("lastReadAt" is null or "lastReadAt" < "lastInboundAt")`;
+  return Number(rows[0]?.n ?? 0);
+}
+
+// A free-text reply from staff, allowed only inside WhatsApp's 24-hour window.
+export async function sendConversationReply(phone: string, rawText: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const text = cleanReplyText(rawText);
+  if (!text) return { ok: false, error: "Write a message first." };
+  const contact = await prisma.whatsAppContact.findUnique({ where: { phone }, select: { lastInboundAt: true } });
+  if (!isReplyWindowOpen(contact?.lastInboundAt)) {
+    return { ok: false, error: "The 24-hour window for free-text replies has closed. Send a notice (an approved template) instead." };
+  }
+  const row = await prisma.whatsAppMessage.create({
+    data: { kind: "REPLY", phone, template: "text", body: text, summary: text.slice(0, 80), dedupeKey: `reply-out:${randomUUID()}` },
+  });
+  const result = await sendText(phone, text);
+  await prisma.whatsAppMessage.update({
+    where: { id: row.id },
+    data: result.ok
+      ? { status: result.dryRun ? "DRY_RUN" : "SENT", waMessageId: result.id, sentAt: new Date() }
+      : { status: "FAILED", error: result.error },
+  });
+  return result.ok ? { ok: true } : { ok: false, error: result.error };
+}
+
+export type PhoneOwners = { students: { id: string; name: string; status: string }[]; lead: { id: string; name: string } | null };
+
+// Which students (as the student or as a parent/guardian) and which lead a
+// phone number belongs to. The CRM stores numbers as typed, so compare on the
+// normalised form.
+export async function ownersOfPhones(phones: string[]): Promise<Map<string, PhoneOwners>> {
+  const wanted = new Set(phones);
+  const owners = new Map<string, PhoneOwners>(phones.map((p) => [p, { students: [], lead: null }]));
+  if (phones.length === 0) return owners;
+
+  const students = await prisma.student.findMany({
+    select: { id: true, name: true, status: true, phone: true, guardians: { select: { user: { select: { phone: true } } } } },
+  });
+  for (const s of students) {
+    const numbers = new Set([s.phone, ...s.guardians.map((g) => g.user.phone)].map((p) => normalizePhone(p)).filter((p): p is string => !!p));
+    for (const n of numbers) if (wanted.has(n)) owners.get(n)!.students.push({ id: s.id, name: s.name, status: s.status });
+  }
+  const leads = await prisma.lead.findMany({ where: { phone: { in: phones } }, orderBy: { createdAt: "desc" }, select: { id: true, name: true, phone: true } });
+  for (const l of leads) {
+    const o = owners.get(l.phone);
+    if (o && !o.lead) o.lead = { id: l.id, name: l.name };
+  }
+  return owners;
+}
+
+export async function listConversations(limit = 100) {
+  const contacts = await prisma.whatsAppContact.findMany({ where: { lastInboundAt: { not: null } }, orderBy: { lastInboundAt: "desc" }, take: limit });
+  const phones = contacts.map((c) => c.phone);
+  const [recent, owners] = await Promise.all([
+    prisma.whatsAppMessage.findMany({ where: { phone: { in: phones } }, orderBy: { createdAt: "desc" }, take: 600 }),
+    ownersOfPhones(phones),
+  ]);
+  const lastByPhone = new Map<string, (typeof recent)[number]>();
+  for (const m of recent) if (!lastByPhone.has(m.phone)) lastByPhone.set(m.phone, m);
+  return contacts.map((c) => ({
+    phone: c.phone,
+    name: c.name,
+    lastInboundAt: c.lastInboundAt!,
+    unread: isUnread(c),
+    last: lastByPhone.get(c.phone) ?? null,
+    owners: owners.get(c.phone)!,
+  }));
+}
+
+export async function getThread(phone: string) {
+  const [contact, messages, owners] = await Promise.all([
+    prisma.whatsAppContact.findUnique({ where: { phone } }),
+    prisma.whatsAppMessage.findMany({ where: { phone }, orderBy: { createdAt: "desc" }, take: 200 }),
+    ownersOfPhones([phone]),
+  ]);
+  return { contact, messages: messages.reverse(), owners: owners.get(phone)! };
 }

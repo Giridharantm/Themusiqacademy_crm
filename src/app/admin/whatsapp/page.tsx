@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Card, CardBody, CardHeader, PageHeader, StatCard, EmptyState, Badge } from "@/components/ui";
-import { NOTICE_TYPES } from "@/lib/whatsapp-notices";
+import { NOTICE_TYPES, istLabel } from "@/lib/whatsapp-notices";
 import { isDryRun, whatsappConfigured } from "@/lib/whatsapp-send";
 import { format } from "date-fns";
 
@@ -80,7 +80,7 @@ export default async function WhatsAppPage({
                       {n.message ? ` · ${n.message}` : ""}
                     </p>
                   </div>
-                  <span className="text-xs text-slate-400 shrink-0">{n.sentAt ? format(n.sentAt, "d MMM, h:mm a") : "Not sent"}</span>
+                  <span className="text-xs text-slate-400 shrink-0">{n.sentAt ? istLabel(n.sentAt) : "Not sent"}</span>
                 </li>
               ))}
             </ul>
@@ -100,7 +100,7 @@ export default async function WhatsAppPage({
                   <div className="min-w-0">
                     <p className="text-sm text-slate-900 truncate">{m.summary ?? m.template}</p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {m.kind.toLowerCase()} · {m.phone} · {format(m.createdAt, "d MMM, h:mm a")}
+                      {m.kind.toLowerCase()} · {m.phone} · {istLabel(m.createdAt)}
                     </p>
                     {m.error && <p className="text-xs text-red-600 mt-0.5 break-words">{m.error}</p>}
                   </div>

@@ -372,6 +372,11 @@ model WhatsAppContact {
   optedInAt  DateTime?
   optedOutAt DateTime?
   source     String? // "whatsapp-reply" | "admin"
+  // Inbox: set when this number has ever written to us. A conversation is
+  // unread while lastInboundAt is newer than lastReadAt.
+  name          String? // their WhatsApp profile name
+  lastInboundAt DateTime?
+  lastReadAt    DateTime?
   updatedAt  DateTime  @updatedAt
 }
 
@@ -407,7 +412,8 @@ model Notice {
 enum WhatsAppMessageKind {
   REMINDER
   NOTICE
-  REPLY
+  REPLY // free-text from staff (inbox) or an automatic STOP/START confirmation
+  INBOUND // a message from a family or enquirer
 }
 
 enum WhatsAppMessageStatus {
@@ -415,6 +421,7 @@ enum WhatsAppMessageStatus {
   SENT
   FAILED
   DRY_RUN
+  RECEIVED // inbound messages
 }
 
 // One row per message we try to send; also what makes the daily reminder job
@@ -429,6 +436,7 @@ model WhatsAppMessage {
   notice      Notice?               @relation(fields: [noticeId], references: [id], onDelete: SetNull)
   template    String
   summary     String? // human-readable, e.g. "Guitar 5:00 PM"
+  body        String? // the text of an inbound message or a free-text reply
   status      WhatsAppMessageStatus @default(PENDING)
   error       String?
   waMessageId String?
@@ -437,4 +445,5 @@ model WhatsAppMessage {
   sentAt      DateTime?
 
   @@index([createdAt])
+  @@index([phone, createdAt])
 }

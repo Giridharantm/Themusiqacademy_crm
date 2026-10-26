@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { currentUser } from "@/lib/authz";
+import { unreadConversationCount } from "@/lib/whatsapp-service";
 
 const links = [
   { href: "/admin", label: "Dashboard" },
@@ -16,9 +17,11 @@ const links = [
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const user = await currentUser();
+  const [user, unread] = await Promise.all([currentUser(), unreadConversationCount()]);
+  // Inbox sits right after the WhatsApp overview, with a count while messages wait.
+  const allLinks = links.flatMap((l) => (l.href === "/admin/whatsapp" ? [l, { href: "/admin/whatsapp/inbox", label: unread > 0 ? `Inbox (${unread})` : "Inbox" }] : [l]));
   return (
-    <AppShell userName={user?.name ?? ""} links={links}>
+    <AppShell userName={user?.name ?? ""} links={allLinks}>
       {children}
     </AppShell>
   );

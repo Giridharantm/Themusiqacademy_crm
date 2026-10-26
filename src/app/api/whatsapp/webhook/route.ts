@@ -11,7 +11,7 @@ import {
   parseStatusUpdates,
 } from "@/lib/whatsapp";
 import { isStartMessage, isStopMessage } from "@/lib/whatsapp-notices";
-import { findStudentOrUserByPhone, recordInboundConsent, sendReply, setConsent } from "@/lib/whatsapp-service";
+import { findStudentOrUserByPhone, recordInbound, recordInboundConsent, sendReply, setConsent } from "@/lib/whatsapp-service";
 
 // Receiver for Meta's WhatsApp Cloud API webhook. Meta calls GET once to
 // verify the URL when it is saved in the app's Webhooks settings, then POSTs
@@ -73,11 +73,18 @@ export async function POST(request: NextRequest) {
 
   const now = new Date();
   let changed = false;
+  let inboxChanged = false;
 
   for (const msg of inbound) {
     if (!seen.add(msg.id)) continue;
     const phone = leadPhoneFromWhatsApp(msg.from);
     const note = whatsappNote(msg.text, now);
+
+    // Every incoming message is kept for the inbox (and marks the conversation
+    // unread). A repeat — Meta re-sends a webhook it didn't get a quick 200
+    // for — is dropped here, so it can't create a second lead or reply.
+    if (!(await recordInbound({ id: msg.id, phone, name: msg.name, text: msg.text, at: msg.at }))) continue;
+    inboxChanged = true;
 
     // STOP / START switch class messages off and on for this number, and are
     // confirmed with a short reply. Whoever sends them, student or not.
@@ -119,6 +126,7 @@ export async function POST(request: NextRequest) {
     revalidatePath("/admin/leads");
     revalidatePath("/admin");
   }
+  if (inboxChanged) revalidatePath("/admin/whatsapp/inbox");
   // Always 200 once the signature checks out — a non-200 makes Meta retry.
   return new NextResponse("OK", { status: 200 });
 }

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   NOTICE_TYPES,
   istDateString,
+  istLabel,
   shortDateLabel,
   clockLabel,
   sanitizeParam,
@@ -158,5 +159,12 @@ describe("reminderMessage", () => {
 
   it("never shows a negative count", () => {
     expect(reminderMessage(r, { used: -2, total: 24 }).params.slice(3)).toEqual(["0", "24"]);
+  });
+});
+
+describe("istLabel", () => {
+  it("shows India time regardless of the server's time zone", () => {
+    expect(istLabel(new Date("2026-10-27T11:11:00Z"))).toMatch(/27 Oct.*4:41\s?pm/i);
+    expect(istLabel(new Date("2026-10-26T20:00:00Z"))).toMatch(/27 Oct.*1:30\s?am/i);
   });
 });

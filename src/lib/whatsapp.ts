@@ -19,6 +19,7 @@ export type InboundMessage = {
   from: string; // digits only, with country code, e.g. "919845708094"
   name: string | null; // the sender's WhatsApp profile name
   text: string;
+  at: Date | null; // when WhatsApp says it was sent
 };
 
 const asRecord = (v: unknown): Record<string, unknown> | null =>
@@ -69,7 +70,14 @@ export function parseInboundMessages(payload: unknown): InboundMessage[] {
         if (!m || typeof m.id !== "string" || typeof m.from !== "string") continue;
         const from = m.from.replace(/\D/g, "");
         if (!from) continue;
-        out.push({ id: m.id, from, name: names.get(m.from) ?? null, text: messageText(m).slice(0, 1000) });
+        const seconds = typeof m.timestamp === "string" ? Number(m.timestamp) : NaN;
+        out.push({
+          id: m.id,
+          from,
+          name: names.get(m.from) ?? null,
+          text: messageText(m).slice(0, 1000),
+          at: Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000) : null,
+        });
       }
     }
   }
