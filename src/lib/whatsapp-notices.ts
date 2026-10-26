@@ -221,3 +221,28 @@ export function nextReminderDateStr(now: Date): string {
   while (!OPERATING_WEEKDAYS.has(day.getUTCDay())) day = new Date(day.getTime() + 86_400_000);
   return day.toISOString().slice(0, 10);
 }
+
+export type ReminderFilter = { course?: string; time?: string; status?: string; q?: string };
+
+// Narrows the Class reminders list: instrument, class time, outcome (will be
+// sent / why not) and a search on the student's name or phone number.
+export function filterReminderRows<T extends { studentName: string; courseName: string; startTime: string; phone: string | null; decision: ReminderDecision }>(
+  rows: T[],
+  f: ReminderFilter
+): T[] {
+  const q = f.q?.trim().toLowerCase();
+  // Numbers are stored without the country code, so "+91 98457 08094" must still find 9845708094.
+  let qDigits = q?.replace(/\D/g, "");
+  if (qDigits && qDigits.length >= 12 && qDigits.startsWith("91")) qDigits = qDigits.slice(2);
+  return rows.filter((r) => {
+    if (f.course && r.courseName !== f.course) return false;
+    if (f.time && r.startTime !== f.time) return false;
+    if (f.status && r.decision !== f.status) return false;
+    if (q) {
+      const nameHit = r.studentName.toLowerCase().includes(q);
+      const phoneHit = !!qDigits && !!r.phone && r.phone.replace(/\D/g, "").includes(qDigits);
+      if (!nameHit && !phoneHit) return false;
+    }
+    return true;
+  });
+}

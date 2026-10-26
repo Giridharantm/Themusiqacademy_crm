@@ -2,7 +2,7 @@
 
 type Option = { value: string; label: string };
 
-function AutoSubmitSelect({
+export function AutoSubmitSelect({
   name,
   value,
   options,

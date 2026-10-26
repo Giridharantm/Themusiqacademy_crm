@@ -6,6 +6,7 @@ import {
   DECISION_LABELS,
   TEMPLATE_BODIES,
   clockLabel,
+  filterReminderRows,
   istDateString,
   istLabel,
   nextReminderDateStr,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/whatsapp-notices";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Button, EmptyState } from "@/components/ui";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { AutoSubmitSelect } from "@/components/batch-filter-fields";
 
 const decisionColor: Record<ReminderDecision, string> = {
   SEND: "green",
@@ -28,7 +30,11 @@ const decisionColor: Record<ReminderDecision, string> = {
 
 const addDays = (dateStr: string, n: number) => new Date(parseDateOnly(dateStr).getTime() + n * 86_400_000 + 12 * 3_600_000).toISOString().slice(0, 10);
 
-export default async function RemindersPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
+export default async function RemindersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string; course?: string; time?: string; status?: string; q?: string }>;
+}) {
   const sp = await searchParams;
   const now = new Date();
   const today = istDateString(now);
@@ -37,6 +43,24 @@ export default async function RemindersPage({ searchParams }: { searchParams: Pr
   const isPast = dateStr < today;
 
   const [plan, pause] = await Promise.all([planReminders(dateStr), getRemindersPaused()]);
+
+  // Filters narrow the list below; the badges above still describe the whole day.
+  const rows = filterReminderRows(plan.rows, { course: sp.course, time: sp.time, status: sp.status, q: sp.q });
+  const filtering = !!(sp.course || sp.time || sp.status || sp.q?.trim());
+  const courseOptions = Array.from(new Set(plan.rows.map((r) => r.courseName)))
+    .sort()
+    .map((c) => ({ value: c, label: c }));
+  const timeOptions = Array.from(new Set(plan.rows.map((r) => r.startTime)))
+    .sort()
+    .map((t) => ({ value: t, label: clockLabel(t) }));
+  const statusOptions = (Object.keys(DECISION_LABELS) as ReminderDecision[])
+    .filter((d) => plan.rows.some((r) => r.decision === d))
+    .map((d) => ({ value: d, label: DECISION_LABELS[d] }));
+  // Previous/next day keep whatever filters are set.
+  const dayLink = (d: string) => ({
+    pathname: "/admin/whatsapp/reminders",
+    query: { date: d, ...(sp.course ? { course: sp.course } : {}), ...(sp.time ? { time: sp.time } : {}), ...(sp.status ? { status: sp.status } : {}), ...(sp.q?.trim() ? { q: sp.q } : {}) },
+  });
 
   const counts = plan.rows.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r.decision]: (acc[r.decision] ?? 0) + 1 }), {});
   const first = plan.rows.find((r) => r.decision === "SEND");
@@ -90,10 +114,10 @@ export default async function RemindersPage({ searchParams }: { searchParams: Pr
           }
           action={
             <div className="flex items-center gap-3 text-sm">
-              <Link href={{ pathname: "/admin/whatsapp/reminders", query: { date: addDays(dateStr, -1) } }} className="text-indigo-600 hover:underline">
+              <Link href={dayLink(addDays(dateStr, -1))} className="text-indigo-600 hover:underline">
                 ← Previous day
               </Link>
-              <Link href={{ pathname: "/admin/whatsapp/reminders", query: { date: addDays(dateStr, 1) } }} className="text-indigo-600 hover:underline">
+              <Link href={dayLink(addDays(dateStr, 1))} className="text-indigo-600 hover:underline">
                 Next day →
               </Link>
             </div>
@@ -120,6 +144,39 @@ export default async function RemindersPage({ searchParams }: { searchParams: Pr
           </CardBody>
         )}
 
+        {plan.isClassDay && plan.rows.length > 0 && (
+          <CardBody className="border-b border-slate-100">
+            <form method="get" className="space-y-2">
+              <input type="hidden" name="date" value={dateStr} />
+              <div className="flex flex-wrap gap-2">
+                <AutoSubmitSelect name="course" value={sp.course} options={courseOptions} placeholder="All instruments" />
+                <AutoSubmitSelect name="time" value={sp.time} options={timeOptions} placeholder="All times" />
+                <AutoSubmitSelect name="status" value={sp.status} options={statusOptions} placeholder="Any status" />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="search"
+                  name="q"
+                  defaultValue={sp.q}
+                  placeholder="Search by student name or phone number…"
+                  className="flex-1 min-w-[12rem] rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                <Button type="submit" variant="secondary">
+                  Search
+                </Button>
+                {filtering && (
+                  <Link href={{ pathname: "/admin/whatsapp/reminders", query: { date: dateStr } }} className="text-sm text-indigo-600 hover:underline">
+                    Clear filters
+                  </Link>
+                )}
+                <span className="text-xs text-slate-500 ml-auto">
+                  {filtering ? `Showing ${rows.length} of ${plan.rows.length}` : `${plan.rows.length} in total`}
+                </span>
+              </div>
+            </form>
+          </CardBody>
+        )}
+
         {!plan.isClassDay ? (
           <CardBody>
             <EmptyState text="No classes on this day" />
@@ -128,9 +185,13 @@ export default async function RemindersPage({ searchParams }: { searchParams: Pr
           <CardBody>
             <EmptyState text="Nobody is enrolled in a class on this day" />
           </CardBody>
+        ) : rows.length === 0 ? (
+          <CardBody>
+            <EmptyState text="No students match those filters" />
+          </CardBody>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {plan.rows.map((r) => (
+            {rows.map((r) => (
               <li key={r.key} className="px-5 py-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm text-slate-900">

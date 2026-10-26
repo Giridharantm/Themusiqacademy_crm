@@ -5,6 +5,7 @@ import {
   istLabel,
   reminderDecision,
   DECISION_LABELS,
+  filterReminderRows,
   nextReminderDateStr,
   shortDateLabel,
   clockLabel,
@@ -203,5 +204,35 @@ describe("nextReminderDateStr", () => {
     expect(nextReminderDateStr(new Date("2026-10-25T12:00:00Z"))).toBe("2026-10-27"); // Sun evening -> Tue
     expect(nextReminderDateStr(new Date("2026-10-26T05:00:00Z"))).toBe("2026-10-27"); // Mon -> Tue
     expect(nextReminderDateStr(new Date("2026-10-26T22:00:00Z"))).toBe("2026-10-27"); // Mon 03:30 IST Tue is today
+  });
+});
+
+describe("filterReminderRows", () => {
+  const rows = [
+    { studentName: "Asha Rao", courseName: "Guitar", startTime: "16:00", phone: "9845708094", decision: "SEND" as const },
+    { studentName: "Ravi Kumar", courseName: "Keyboard", startTime: "16:00", phone: "9880831267", decision: "NO_CONSENT" as const },
+    { studentName: "Meera", courseName: "Guitar", startTime: "17:00", phone: null, decision: "NO_PHONE" as const },
+  ];
+  const names = (f: Parameters<typeof filterReminderRows>[1]) => filterReminderRows(rows, f).map((r) => r.studentName);
+
+  it("returns everything with no filter", () => {
+    expect(names({})).toEqual(["Asha Rao", "Ravi Kumar", "Meera"]);
+  });
+
+  it("filters by instrument, time and outcome, alone or together", () => {
+    expect(names({ course: "Guitar" })).toEqual(["Asha Rao", "Meera"]);
+    expect(names({ time: "16:00" })).toEqual(["Asha Rao", "Ravi Kumar"]);
+    expect(names({ status: "NO_CONSENT" })).toEqual(["Ravi Kumar"]);
+    expect(names({ course: "Guitar", time: "17:00" })).toEqual(["Meera"]);
+    expect(names({ course: "Violin" })).toEqual([]);
+  });
+
+  it("searches names (any case, partial) and phone numbers (however typed)", () => {
+    expect(names({ q: "ravi" })).toEqual(["Ravi Kumar"]);
+    expect(names({ q: "  ASHA " })).toEqual(["Asha Rao"]);
+    expect(names({ q: "98457" })).toEqual(["Asha Rao"]);
+    expect(names({ q: "+91 98808-31267" })).toEqual(["Ravi Kumar"]); // the country code is ignored
+    expect(names({ q: "98808 31267" })).toEqual(["Ravi Kumar"]);
+    expect(names({ q: "zzz" })).toEqual([]);
   });
 });
