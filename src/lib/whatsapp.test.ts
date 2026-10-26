@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createHmac } from "node:crypto";
-import { verifySignature, parseInboundMessages, leadPhoneFromWhatsApp, whatsappNote, createSeenIds } from "./whatsapp";
+import { verifySignature, parseInboundMessages, leadPhoneFromWhatsApp, whatsappNote, createSeenIds, summarizeWebhook } from "./whatsapp";
 
 const sign = (body: string, secret: string) => "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
 
@@ -91,5 +91,21 @@ describe("createSeenIds", () => {
     seen.add("b");
     seen.add("c");
     expect(seen.add("a")).toBe(true);
+  });
+});
+
+describe("summarizeWebhook", () => {
+  it("describes fields, counts and message keys without including any content", () => {
+    const s = summarizeWebhook(
+      payload({ messages: [{ id: "a", from: "919845708094", type: "text", text: { body: "secret words" } }], statuses: [{}, {}] })
+    );
+    expect(s).toBe("object=whatsapp_business_account fields=[messages] messages=1 statuses=2 messageKeys=[id,from,type,text]");
+    expect(s).not.toContain("secret words");
+    expect(s).not.toContain("9845708094");
+  });
+
+  it("copes with junk", () => {
+    expect(summarizeWebhook(null)).toBe("not-an-object");
+    expect(summarizeWebhook({ object: "x" })).toBe("object=x fields=[] messages=0 statuses=0 messageKeys=[]");
   });
 });

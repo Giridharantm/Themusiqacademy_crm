@@ -7,6 +7,7 @@ import {
   leadPhoneFromWhatsApp,
   whatsappNote,
   createSeenIds,
+  summarizeWebhook,
 } from "@/lib/whatsapp";
 
 // Receiver for Meta's WhatsApp Cloud API webhook. Meta calls GET once to
@@ -27,11 +28,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const appSecret = process.env.WHATSAPP_APP_SECRET;
-  if (!appSecret) return new NextResponse("Not configured", { status: 503 });
+  if (!appSecret) {
+    console.warn("[whatsapp] webhook POST refused: WHATSAPP_APP_SECRET not set");
+    return new NextResponse("Not configured", { status: 503 });
+  }
 
   const raw = await request.text();
   if (raw.length > 200_000) return new NextResponse("Too large", { status: 413 });
   if (!verifySignature(raw, request.headers.get("x-hub-signature-256"), appSecret)) {
+    console.warn("[whatsapp] webhook POST refused: bad or missing signature");
     return new NextResponse("Invalid signature", { status: 401 });
   }
 
@@ -42,10 +47,15 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Invalid JSON", { status: 400 });
   }
 
+  const inbound = parseInboundMessages(payload);
+  // No message text or numbers here — just enough to tell "Meta never called"
+  // from "Meta called but the payload wasn't what we expected".
+  console.log(`[whatsapp] webhook received: ${summarizeWebhook(payload)} parsed=${inbound.length}`);
+
   const now = new Date();
   let changed = false;
 
-  for (const msg of parseInboundMessages(payload)) {
+  for (const msg of inbound) {
     if (!seen.add(msg.id)) continue;
     const phone = leadPhoneFromWhatsApp(msg.from);
     const note = whatsappNote(msg.text, now);
@@ -56,7 +66,10 @@ export async function POST(request: NextRequest) {
       prisma.student.findFirst({ where: { phone }, select: { id: true } }),
       prisma.user.findFirst({ where: { phone }, select: { id: true } }),
     ]);
-    if (student || user) continue;
+    if (student || user) {
+      console.log("[whatsapp] message skipped: sender is an existing student or user");
+      continue;
+    }
 
     const existing = await prisma.lead.findFirst({ where: { phone }, orderBy: { createdAt: "desc" } });
     if (existing) {

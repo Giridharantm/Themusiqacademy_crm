@@ -102,3 +102,34 @@ export function createSeenIds(max = 2000) {
     },
   };
 }
+
+// A one-line, PII-free description of a webhook payload for the server log
+// (which fields changed, how many messages/statuses, and which keys the
+// first message carries), so a message that never becomes a lead can be told
+// apart from one Meta never sent.
+export function summarizeWebhook(payload: unknown): string {
+  const root = asRecord(payload);
+  if (!root) return "not-an-object";
+  const fields: string[] = [];
+  let messages = 0;
+  let statuses = 0;
+  let messageKeys: string[] = [];
+  if (Array.isArray(root.entry)) {
+    for (const entry of root.entry) {
+      const changes = asRecord(entry)?.changes;
+      if (!Array.isArray(changes)) continue;
+      for (const change of changes) {
+        const c = asRecord(change);
+        if (typeof c?.field === "string") fields.push(c.field);
+        const value = asRecord(c?.value);
+        if (Array.isArray(value?.messages)) {
+          messages += value.messages.length;
+          const first = asRecord(value.messages[0]);
+          if (first && messageKeys.length === 0) messageKeys = Object.keys(first);
+        }
+        if (Array.isArray(value?.statuses)) statuses += value.statuses.length;
+      }
+    }
+  }
+  return `object=${String(root.object)} fields=[${fields.join(",")}] messages=${messages} statuses=${statuses} messageKeys=[${messageKeys.join(",")}]`;
+}
