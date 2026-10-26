@@ -14,6 +14,8 @@ import {
   renderTemplate,
   TEMPLATE_BODIES,
   TEMPLATE_REMINDER,
+  TEMPLATE_REMINDER_PROGRESS,
+  reminderMessage,
   TEMPLATE_NOTICE,
   TEMPLATE_RESCHEDULED,
 } from "./whatsapp-notices";
@@ -134,5 +136,27 @@ describe("renderTemplate", () => {
     expect(TEMPLATE_BODIES[TEMPLATE_REMINDER].match(/\{\{\d+\}\}/g)).toHaveLength(3);
     expect(TEMPLATE_BODIES[TEMPLATE_RESCHEDULED].match(/\{\{\d+\}\}/g)).toHaveLength(4);
     expect(TEMPLATE_BODIES[TEMPLATE_NOTICE].match(/\{\{\d+\}\}/g)).toHaveLength(4);
+  });
+});
+
+describe("reminderMessage", () => {
+  const r = { studentName: "Asha", courseName: "Guitar", startTime: "17:00" };
+
+  it("adds classes completed vs. subscribed when the student has a current subscription", () => {
+    const m = reminderMessage(r, { used: 13, total: 28 });
+    expect(m.template).toBe(TEMPLATE_REMINDER_PROGRESS);
+    expect(m.params).toEqual(["Asha", "Guitar", "5:00 PM", "13", "28"]);
+    expect(renderTemplate(TEMPLATE_BODIES[m.template], m.params)).toBe(
+      "Hello! A reminder from The Musiq Academy: Asha's Guitar class is today at 5:00 PM. Classes completed so far: 13 of 28. See you at the academy!"
+    );
+  });
+
+  it("sends the plain reminder when there is no current subscription", () => {
+    expect(reminderMessage(r, null)).toEqual({ template: TEMPLATE_REMINDER, params: ["Asha", "Guitar", "5:00 PM"] });
+    expect(reminderMessage(r, { used: 0, total: 0 }).template).toBe(TEMPLATE_REMINDER);
+  });
+
+  it("never shows a negative count", () => {
+    expect(reminderMessage(r, { used: -2, total: 24 }).params.slice(3)).toEqual(["0", "24"]);
   });
 });

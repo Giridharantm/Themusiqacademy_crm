@@ -8,15 +8,17 @@ import { dayCodeFromDate, OPERATING_DAYS } from "@/lib/schedule";
 import {
   NOTICE_TYPES,
   TEMPLATE_NOTICE,
-  TEMPLATE_REMINDER,
   TEMPLATE_RESCHEDULED,
   clockLabel,
   istDateString,
   recipientPhones,
+  reminderMessage,
   shortDateLabel,
+  type ClassProgress,
   type NoticeTypeKey,
 } from "@/lib/whatsapp-notices";
 import { sendTemplate, sendText, whatsappConfigured } from "@/lib/whatsapp-send";
+import { attendanceForSubscription, countUsedClasses, subscriptionTotals } from "@/lib/subscription";
 
 // ---- consent --------------------------------------------------------------
 
@@ -62,6 +64,9 @@ export type ClassRecipient = {
   courseName: string;
   startTime: string;
   teacherName: string | null;
+  // Classes completed vs. classes in the student's CURRENT subscription for
+  // this instrument (same numbers as the student page); null if they have none.
+  progress: ClassProgress | null;
   phones: { phone: string; consented: boolean }[];
 };
 
@@ -78,6 +83,25 @@ export async function recipientsForBatches(batchIds: string[]): Promise<ClassRec
     orderBy: [{ batch: { startTime: "asc" } }, { student: { name: "asc" } }],
   });
 
+  // Current (ACTIVE) subscription per student + instrument, with the live
+  // attendance count — computed exactly as on the student page.
+  const studentIds = Array.from(new Set(enrollments.map((e) => e.studentId)));
+  const [subscriptions, attendance] = await Promise.all([
+    prisma.subscription.findMany({
+      where: { status: "ACTIVE", studentId: { in: studentIds } },
+      include: { bonusGrants: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.attendance.findMany({ where: { studentId: { in: studentIds }, status: "PRESENT" }, select: { studentId: true, courseId: true, date: true, status: true } }),
+  ]);
+  const progressOf = (studentId: string, courseId: string): ClassProgress | null => {
+    const sub = subscriptions.find((s) => s.studentId === studentId && s.courseId === courseId);
+    if (!sub) return null;
+    const mine = attendance.filter((a) => a.studentId === studentId && a.courseId === courseId);
+    const totals = subscriptionTotals(sub, countUsedClasses(attendanceForSubscription(sub.startDate, mine)));
+    return { used: totals.used, total: totals.totalClasses };
+  };
+
   const rows = enrollments.map((e) => ({
     studentId: e.studentId,
     studentName: e.student.name,
@@ -85,6 +109,7 @@ export async function recipientsForBatches(batchIds: string[]): Promise<ClassRec
     courseName: e.batch.course.name,
     startTime: e.batch.startTime,
     teacherName: e.batch.teacher?.name ?? null,
+    progress: progressOf(e.studentId, e.batch.courseId),
     phones: recipientPhones(e.student.guardians.map((g) => g.user.phone), e.student.phone),
   }));
 
@@ -187,8 +212,7 @@ export async function runClassReminders(now = new Date()): Promise<ReminderRun> 
         kind: "REMINDER",
         phone,
         studentId: r.studentId,
-        template: TEMPLATE_REMINDER,
-        params: [r.studentName, r.courseName, clockLabel(r.startTime)],
+        ...reminderMessage(r, r.progress),
         summary: `${r.courseName} ${clockLabel(r.startTime)} · ${r.studentName}`,
         dedupeKey: `reminder:${dateStr}:${r.studentId}:${r.batchId}:${phone}`,
       });
