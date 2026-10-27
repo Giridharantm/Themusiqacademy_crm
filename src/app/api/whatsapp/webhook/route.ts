@@ -7,11 +7,12 @@ import {
   leadPhoneFromWhatsApp,
   whatsappNote,
   createSeenIds,
+  createsLead,
   summarizeWebhook,
   parseStatusUpdates,
 } from "@/lib/whatsapp";
 import { isStartMessage, isStopMessage } from "@/lib/whatsapp-notices";
-import { findStudentOrUserByPhone, recordInbound, recordInboundConsent, sendReply, setConsent } from "@/lib/whatsapp-service";
+import { findStudentOrUserByPhone, isBlocked, recordInbound, recordInboundConsent, sendReply, setConsent } from "@/lib/whatsapp-service";
 
 // Receiver for Meta's WhatsApp Cloud API webhook. Meta calls GET once to
 // verify the URL when it is saved in the app's Webhooks settings, then POSTs
@@ -80,6 +81,12 @@ export async function POST(request: NextRequest) {
     const phone = leadPhoneFromWhatsApp(msg.from);
     const note = whatsappNote(msg.text, now);
 
+    // A number marked as spam is ignored completely: no inbox entry, no lead.
+    if (await isBlocked(phone)) {
+      console.log("[whatsapp] message from a blocked number ignored");
+      continue;
+    }
+
     // Every incoming message is kept for the inbox (and marks the conversation
     // unread). A repeat — Meta re-sends a webhook it didn't get a quick 200
     // for — is dropped here, so it can't create a second lead or reply.
@@ -105,6 +112,13 @@ export async function POST(request: NextRequest) {
     if (await findStudentOrUserByPhone(phone)) {
       await recordInboundConsent(phone);
       console.log("[whatsapp] message from an existing student or user: recorded as consent, no lead");
+      continue;
+    }
+
+    // Something WhatsApp couldn't pass on (often spam) stays in the inbox but
+    // never becomes a lead.
+    if (!createsLead(msg.type)) {
+      console.log("[whatsapp] unsupported message: kept in the inbox, no lead created");
       continue;
     }
 

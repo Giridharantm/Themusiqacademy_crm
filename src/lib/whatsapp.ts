@@ -19,6 +19,7 @@ export type InboundMessage = {
   from: string; // digits only, with country code, e.g. "919845708094"
   name: string | null; // the sender's WhatsApp profile name
   text: string;
+  type: string; // text | image | audio | unsupported | …
   at: Date | null; // when WhatsApp says it was sent
 };
 
@@ -76,6 +77,7 @@ export function parseInboundMessages(payload: unknown): InboundMessage[] {
           from,
           name: names.get(m.from) ?? null,
           text: messageText(m).slice(0, 1000),
+          type: typeof m.type === "string" ? m.type : "unknown",
           at: Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000) : null,
         });
       }
@@ -181,3 +183,9 @@ export function parseStatusUpdates(payload: unknown): StatusUpdate[] {
   }
   return out;
 }
+
+// WhatsApp flags what it can't pass on to a business number (polls, view-once
+// media, spam broadcasts…) as "unsupported". There is nothing to follow up on,
+// so such a message from a new number must not become a lead — it still shows
+// in the inbox, where it can be blocked.
+export const createsLead = (type: string) => type !== "unsupported" && type !== "unknown";

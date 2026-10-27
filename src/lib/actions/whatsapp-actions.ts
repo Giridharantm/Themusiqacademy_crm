@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/authz";
 import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/attendance";
-import { createAndSendNotice, markConversationRead, sendConversationReply, setConsent, setRemindersPaused } from "@/lib/whatsapp-service";
+import { blockNumber, createAndSendNotice, markConversationRead, sendConversationReply, setConsent, setRemindersPaused, unblockNumber } from "@/lib/whatsapp-service";
 import { isNoticeType, normalizePhone } from "@/lib/whatsapp-notices";
 
 // Sends an ad hoc notice to the opted-in families of the chosen classes. The
@@ -98,4 +98,30 @@ export async function setStudentRemindersOff(studentId: string, off: boolean) {
   await prisma.student.update({ where: { id: studentId }, data: { remindersOff: off } });
   revalidatePath("/admin/whatsapp/reminders");
   revalidatePath(`/admin/students/${studentId}`);
+}
+
+// Marks a number as spam from the inbox: blocks it on WhatsApp, hides the
+// conversation and ignores everything it sends from now on. The lead it may
+// have created is left for staff to delete.
+export async function markNumberAsSpam(phone: string) {
+  await requireRole("ADMIN");
+  const normalized = normalizePhone(phone);
+  if (!normalized) throw new Error("That phone number is not valid");
+  const result = await blockNumber(normalized);
+  revalidatePath("/admin/whatsapp/inbox");
+  revalidatePath("/admin");
+  const q = new URLSearchParams({ blocked: normalized });
+  if (result.warning) q.set("warning", result.warning);
+  redirect(`/admin/whatsapp/inbox?${q.toString()}`);
+}
+
+export async function unblockNumberAction(phone: string) {
+  await requireRole("ADMIN");
+  const normalized = normalizePhone(phone);
+  if (!normalized) throw new Error("That phone number is not valid");
+  const result = await unblockNumber(normalized);
+  revalidatePath("/admin/whatsapp/inbox");
+  const q = new URLSearchParams({ unblocked: normalized });
+  if (result.warning) q.set("warning", result.warning);
+  redirect(`/admin/whatsapp/inbox?${q.toString()}`);
 }

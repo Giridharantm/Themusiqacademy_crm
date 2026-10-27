@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { sendInboxReply } from "@/lib/actions/whatsapp-actions";
-import { getThread, listConversations } from "@/lib/whatsapp-service";
+import { markNumberAsSpam, sendInboxReply, unblockNumberAction } from "@/lib/actions/whatsapp-actions";
+import { getThread, listBlocked, listConversations } from "@/lib/whatsapp-service";
 import { isReplyWindowOpen, previewText, replyHoursLeft, isUnread } from "@/lib/whatsapp-inbox";
 import { istLabel, normalizePhone } from "@/lib/whatsapp-notices";
-import { Card, CardBody, CardHeader, PageHeader, Textarea, EmptyState } from "@/components/ui";
+import { Button, Card, CardBody, CardHeader, PageHeader, Textarea, EmptyState } from "@/components/ui";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { SubmitButton } from "@/components/submit-button";
 import { MarkReadOnMount } from "@/components/mark-read-on-mount";
 
@@ -16,11 +17,15 @@ function titleFor(owners: Owners, name: string | null, phone: string) {
   return owners.lead?.name ?? name ?? phone;
 }
 
-export default async function InboxPage({ searchParams }: { searchParams: Promise<{ phone?: string; error?: string }> }) {
+export default async function InboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ phone?: string; error?: string; blocked?: string; unblocked?: string; warning?: string }>;
+}) {
   const sp = await searchParams;
   const selected = normalizePhone(sp.phone) ?? null;
 
-  const conversations = await listConversations();
+  const [conversations, blockedNumbers] = await Promise.all([listConversations(), listBlocked()]);
   const thread = selected ? await getThread(selected) : null;
   const windowOpen = isReplyWindowOpen(thread?.contact?.lastInboundAt);
 
@@ -36,7 +41,17 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
         }
       />
 
+      {(sp.blocked || sp.unblocked) && (
+        <div className={`mb-4 rounded-md border px-4 py-3 text-sm ${sp.warning ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
+          {sp.blocked
+            ? `${sp.blocked} is marked as spam and hidden. Anything it sends is ignored, and we will never message it.`
+            : `${sp.unblocked} is unblocked.`}
+          {sp.warning && <span> WhatsApp itself said: {sp.warning}. (It only lets a business block someone who messaged within the last 24 hours — the number is still ignored here.)</span>}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="space-y-6">
         <Card className="h-fit">
           <CardHeader title="Conversations" subtitle="Newest message first" />
           {conversations.length === 0 ? (
@@ -71,6 +86,28 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
           )}
         </Card>
 
+        {blockedNumbers.length > 0 && (
+          <Card className="h-fit">
+            <CardHeader title="Blocked as spam" subtitle="Hidden here and ignored; they can't message you on WhatsApp" />
+            <ul className="divide-y divide-slate-100">
+              {blockedNumbers.map((b) => (
+                <li key={b.phone} className="px-5 py-2.5 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-slate-900">{b.phone}</p>
+                    <p className="text-xs text-slate-500">{b.blockedAt ? istLabel(b.blockedAt) : ""}</p>
+                  </div>
+                  <form action={unblockNumberAction.bind(null, b.phone)}>
+                    <Button type="submit" variant="ghost">
+                      Unblock
+                    </Button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+        </div>
+
         <Card className="lg:col-span-2 h-fit">
           {!thread || !selected ? (
             <CardBody>
@@ -96,6 +133,15 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
                     <Link href="/admin/whatsapp/new" className="text-xs text-indigo-600 hover:underline">
                       New notice
                     </Link>
+                    <form action={markNumberAsSpam.bind(null, selected)}>
+                      <ConfirmSubmitButton
+                        variant="ghost"
+                        className="text-red-600"
+                        confirmMessage={`Mark ${selected} as spam? It will be blocked on WhatsApp, hidden from the inbox, and anything it sends will be ignored.`}
+                      >
+                        Mark as spam
+                      </ConfirmSubmitButton>
+                    </form>
                   </div>
                 }
               />

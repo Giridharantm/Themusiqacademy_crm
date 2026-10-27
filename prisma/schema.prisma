@@ -381,6 +381,9 @@ model WhatsAppContact {
   name          String? // their WhatsApp profile name
   lastInboundAt DateTime?
   lastReadAt    DateTime?
+  // Marked as spam from the inbox: blocked on WhatsApp too, and anything they
+  // send is ignored (no lead, no inbox entry), and we never message them.
+  blockedAt     DateTime?
   updatedAt  DateTime  @updatedAt
 }
 

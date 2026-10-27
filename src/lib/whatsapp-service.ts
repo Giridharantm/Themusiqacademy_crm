@@ -21,7 +21,7 @@ import {
   type ReminderDecision,
   type NoticeTypeKey,
 } from "@/lib/whatsapp-notices";
-import { sendTemplate, sendText, whatsappConfigured } from "@/lib/whatsapp-send";
+import { sendTemplate, sendText, setWhatsAppBlock, whatsappConfigured } from "@/lib/whatsapp-send";
 import { cleanReplyText, isReplyWindowOpen, isUnread } from "@/lib/whatsapp-inbox";
 import { attendanceForSubscription, countUsedClasses, subscriptionTotals } from "@/lib/subscription";
 
@@ -122,7 +122,7 @@ export async function recipientsForBatches(batchIds: string[]): Promise<ClassRec
 
   const allPhones = Array.from(new Set(rows.flatMap((r) => r.phones)));
   const optedIn = new Set(
-    (await prisma.whatsAppContact.findMany({ where: { phone: { in: allPhones }, optedIn: true }, select: { phone: true } })).map((c) => c.phone)
+    (await prisma.whatsAppContact.findMany({ where: { phone: { in: allPhones }, optedIn: true, blockedAt: null }, select: { phone: true } })).map((c) => c.phone)
   );
 
   return rows.map((r) => ({ ...r, phones: r.phones.map((phone) => ({ phone, consented: optedIn.has(phone) })) }));
@@ -441,7 +441,7 @@ export async function markConversationRead(phone: string) {
 export async function unreadConversationCount(): Promise<number> {
   const rows = await prisma.$queryRaw<{ n: bigint }[]>`
     select count(*) as n from "WhatsAppContact"
-    where "lastInboundAt" is not null and ("lastReadAt" is null or "lastReadAt" < "lastInboundAt")`;
+    where "lastInboundAt" is not null and "blockedAt" is null and ("lastReadAt" is null or "lastReadAt" < "lastInboundAt")`;
   return Number(rows[0]?.n ?? 0);
 }
 
@@ -449,7 +449,8 @@ export async function unreadConversationCount(): Promise<number> {
 export async function sendConversationReply(phone: string, rawText: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const text = cleanReplyText(rawText);
   if (!text) return { ok: false, error: "Write a message first." };
-  const contact = await prisma.whatsAppContact.findUnique({ where: { phone }, select: { lastInboundAt: true } });
+  const contact = await prisma.whatsAppContact.findUnique({ where: { phone }, select: { lastInboundAt: true, blockedAt: true } });
+  if (contact?.blockedAt) return { ok: false, error: "This number is blocked." };
   if (!isReplyWindowOpen(contact?.lastInboundAt)) {
     return { ok: false, error: "The 24-hour window for free-text replies has closed. Send a notice (an approved template) instead." };
   }
@@ -492,7 +493,7 @@ export async function ownersOfPhones(phones: string[]): Promise<Map<string, Phon
 }
 
 export async function listConversations(limit = 100) {
-  const contacts = await prisma.whatsAppContact.findMany({ where: { lastInboundAt: { not: null } }, orderBy: { lastInboundAt: "desc" }, take: limit });
+  const contacts = await prisma.whatsAppContact.findMany({ where: { lastInboundAt: { not: null }, blockedAt: null }, orderBy: { lastInboundAt: "desc" }, take: limit });
   const phones = contacts.map((c) => c.phone);
   const [recent, owners] = await Promise.all([
     prisma.whatsAppMessage.findMany({ where: { phone: { in: phones } }, orderBy: { createdAt: "desc" }, take: 600 }),
@@ -517,4 +518,35 @@ export async function getThread(phone: string) {
     ownersOfPhones([phone]),
   ]);
   return { contact, messages: messages.reverse(), owners: owners.get(phone)! };
+}
+
+// ---- spam / blocking ------------------------------------------------------
+
+export async function isBlocked(phone: string): Promise<boolean> {
+  const c = await prisma.whatsAppContact.findUnique({ where: { phone }, select: { blockedAt: true } });
+  return !!c?.blockedAt;
+}
+
+// Marks a number as spam: blocks it on WhatsApp (which only works for someone
+// who messaged us in the last 24 hours) and, either way, ignores it from now
+// on and never messages it. Returns a warning if WhatsApp itself refused.
+export async function blockNumber(phone: string): Promise<{ whatsappBlocked: boolean; warning: string | null }> {
+  const result = await setWhatsAppBlock(phone, true);
+  const now = new Date();
+  await prisma.whatsAppContact.upsert({
+    where: { phone },
+    create: { phone, blockedAt: now, lastReadAt: now },
+    update: { blockedAt: now, lastReadAt: now, optedIn: false, optedOutAt: now },
+  });
+  return { whatsappBlocked: result.ok, warning: result.ok ? null : result.error };
+}
+
+export async function unblockNumber(phone: string): Promise<{ warning: string | null }> {
+  const result = await setWhatsAppBlock(phone, false);
+  await prisma.whatsAppContact.updateMany({ where: { phone }, data: { blockedAt: null } });
+  return { warning: result.ok ? null : result.error };
+}
+
+export async function listBlocked() {
+  return prisma.whatsAppContact.findMany({ where: { blockedAt: { not: null } }, orderBy: { blockedAt: "desc" }, select: { phone: true, name: true, blockedAt: true } });
 }

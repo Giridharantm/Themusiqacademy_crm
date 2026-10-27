@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createHmac } from "node:crypto";
-import { verifySignature, parseInboundMessages, leadPhoneFromWhatsApp, whatsappNote, createSeenIds, summarizeWebhook, parseStatusUpdates } from "./whatsapp";
+import { verifySignature, parseInboundMessages, leadPhoneFromWhatsApp, whatsappNote, createSeenIds, summarizeWebhook, parseStatusUpdates, createsLead } from "./whatsapp";
 
 const sign = (body: string, secret: string) => "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
 
@@ -34,7 +34,7 @@ describe("parseInboundMessages", () => {
         messages: [{ id: "wamid.1", from: "919845708094", type: "text", text: { body: " Hi, guitar classes? " } }],
       })
     );
-    expect(msgs).toEqual([{ id: "wamid.1", from: "919845708094", name: "Aldrin", text: "Hi, guitar classes?", at: null }]);
+    expect(msgs).toEqual([{ id: "wamid.1", from: "919845708094", name: "Aldrin", text: "Hi, guitar classes?", type: "text", at: null }]);
   });
 
   it("describes non-text messages and reads button and list replies", () => {
@@ -134,5 +134,19 @@ describe("parseStatusUpdates", () => {
     expect(parseStatusUpdates(null)).toEqual([]);
     expect(parseStatusUpdates(wrap([{ status: "sent" }, 5]))).toEqual([]);
     expect(parseStatusUpdates(payload({ messages: [{ id: "a", from: "1", type: "text" }] }))).toEqual([]);
+  });
+});
+
+describe("createsLead / unsupported messages", () => {
+  it("exposes the message type and never makes a lead from an unsupported one", () => {
+    const [m] = parseInboundMessages(payload({ messages: [{ id: "u1", from: "919404349369", type: "unsupported", errors: [{ code: 131051 }] }] }));
+    expect(m.type).toBe("unsupported");
+    expect(m.text).toBe("[unsupported message]");
+    expect(createsLead(m.type)).toBe(false);
+  });
+
+  it("still makes leads from ordinary enquiries, including photos and voice notes", () => {
+    for (const t of ["text", "image", "audio", "button", "interactive", "document"]) expect(createsLead(t)).toBe(true);
+    expect(createsLead("unknown")).toBe(false);
   });
 });
