@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/authz";
 import { Card, CardBody, CardHeader, PageHeader, Badge, EmptyState } from "@/components/ui";
@@ -133,10 +134,17 @@ export default async function ParentStudentPage({ params }: { params: Promise<{ 
                   return (
                     <li key={inv.id} className="px-5 py-3 flex items-center justify-between text-sm">
                       <div>
-                        <p className="text-slate-900 font-medium">{inv.invoiceNumber}</p>
+                        <Link href={`/parent/invoices/${inv.id}`} className="text-slate-900 font-medium hover:text-indigo-600">
+                          {inv.invoiceNumber}
+                        </Link>
                         <p className="text-xs text-slate-500">Due {format(inv.dueDate, "d MMM yyyy")} · Rs. {paid.toLocaleString("en-IN")} of {inv.total.toLocaleString("en-IN")} paid</p>
                       </div>
-                      <Badge color={statusColors[inv.status]}>{inv.status}</Badge>
+                      <div className="flex items-center gap-3">
+                        <Link href={`/parent/invoices/${inv.id}`} className="text-xs text-indigo-600 hover:underline">
+                          View
+                        </Link>
+                        <Badge color={statusColors[inv.status]}>{inv.status}</Badge>
+                      </div>
                     </li>
                   );
                 })}

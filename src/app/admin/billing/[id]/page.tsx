@@ -3,7 +3,6 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { recordPayment, cancelInvoice, deleteInvoice } from "@/lib/actions/billing-actions";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Input, Select, Button, EmptyState } from "@/components/ui";
-import { PrintButton } from "@/components/print-button";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { format } from "date-fns";
 
@@ -133,7 +132,12 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
 
           <Card>
             <CardBody>
-              <PrintButton />
+              <Link
+                href={`/admin/billing/${invoice.id}/invoice`}
+                className="inline-flex w-full items-center justify-center gap-1.5 px-3.5 py-2 rounded-md text-sm font-medium transition-colors bg-white text-ink border border-line hover:bg-panel"
+              >
+                View / print invoice
+              </Link>
             </CardBody>
           </Card>
 
