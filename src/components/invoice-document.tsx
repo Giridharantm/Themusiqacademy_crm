@@ -16,10 +16,14 @@ export function InvoiceDocument({ invoice, courseNames }: { invoice: InvoiceForD
   const balance = Math.max(invoice.total - paid, 0);
   const subtotal = invoice.items.reduce((s, i) => s + i.amount, 0);
 
-  const rows = invoice.items.map((item) => ({ item, e: itemEnrolment(item, courseNames) }));
+  // Each line carries its own validity dates when it bills a subscription;
+  // older invoices fall back to the invoice's billing period.
+  const rows = invoice.items.map((item) => {
+    const start = item.periodStart ?? invoice.periodStart;
+    const end = item.periodEnd ?? invoice.periodEnd;
+    return { item, e: itemEnrolment(item, courseNames), periodText: start && end ? `${invoiceDate(start)} – ${invoiceDate(end)}` : null };
+  });
   const enrolled = rows.filter((r) => r.e.instrument || r.e.planLabel);
-  const hasPeriod = !!(invoice.periodStart && invoice.periodEnd);
-  const periodText = hasPeriod ? `${invoiceDate(invoice.periodStart!)} – ${invoiceDate(invoice.periodEnd!)}` : null;
 
   const guardians = invoice.student.guardians.map((g) => g.user);
   const phones = Array.from(new Set([...guardians.map((g) => g.phone), invoice.student.phone].filter((p): p is string => !!p)));
@@ -87,7 +91,7 @@ export function InvoiceDocument({ invoice, courseNames }: { invoice: InvoiceForD
             <div className="flex-1 rounded-[10px] border border-gold/50 bg-panel/60 px-4 py-3.5">
               <p className="mb-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-muted">Enrolment</p>
               <div className="space-y-3">
-                {enrolled.map(({ item, e }) => (
+                {enrolled.map(({ item, e, periodText }) => (
                   <div key={item.id}>
                     {e.instrument && <p className="text-base font-semibold">{e.instrument}</p>}
                     {(e.planLabel || e.classesLabel) && <p className="mt-0.5 text-[0.8rem] text-muted">{[e.planLabel, e.classesLabel].filter(Boolean).join(" · ")}</p>}
@@ -116,7 +120,7 @@ export function InvoiceDocument({ invoice, courseNames }: { invoice: InvoiceForD
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ item, e }) => (
+            {rows.map(({ item, e, periodText }) => (
               <tr key={item.id} className="border-b border-line align-top">
                 <td className="px-1 py-3">
                   <p className="font-semibold">{item.description}</p>
@@ -173,6 +177,7 @@ export function InvoiceDocument({ invoice, courseNames }: { invoice: InvoiceForD
                   <div key={p.id} className="flex justify-between gap-3 py-1 text-emerald-700">
                     <span>
                       Paid · {METHOD_LABELS[p.method] ?? p.method} · {invoiceDate(p.paidDate)}
+                      {p.reference ? ` · Ref ${p.reference}` : ""}
                     </span>
                     <span className="whitespace-nowrap">Rs. {money(p.amount)}</span>
                   </div>

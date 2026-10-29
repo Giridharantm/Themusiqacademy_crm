@@ -49,13 +49,26 @@ export type ItemEnrolment = {
   validity: string | null; // "4 months"
 };
 
-export function itemEnrolment(item: { description: string; amount: number }, courseNames: string[]): ItemEnrolment {
-  const plan = planForAmount(item.amount);
+export type EnrolmentItem = {
+  description: string;
+  amount: number;
+  plan?: SubscriptionPlan | null;
+  periodStart?: Date | null;
+  periodEnd?: Date | null;
+};
+
+// What a line of the invoice bills. A line raised from a subscription says
+// which plan and dates it was (copied at invoicing time); an older line has
+// only free text and an amount, from which the plan is worked out.
+export function itemEnrolment(item: EnrolmentItem, courseNames: string[]): ItemEnrolment {
+  const plan = item.plan ?? planForAmount(item.amount);
+  const standard = plan && plan !== "CUSTOM" ? plan : null;
+  const customDays = item.periodStart && item.periodEnd ? Math.round((item.periodEnd.getTime() - item.periodStart.getTime()) / 86_400_000) : 0;
   return {
     instrument: courseInDescription(item.description, courseNames),
     planLabel: plan ? `${PLAN_LABELS[plan]} enrolment` : null,
-    classesLabel: plan && !/class/i.test(item.description) ? `${PLAN_CLASSES[plan]} classes` : null,
-    validity: plan ? validityLabel(PLAN_DAYS[plan]) : null,
+    classesLabel: standard && !/class/i.test(item.description) ? `${PLAN_CLASSES[standard]} classes` : null,
+    validity: standard ? validityLabel(PLAN_DAYS[standard]) : customDays > 0 ? validityLabel(customDays) : null,
   };
 }
 

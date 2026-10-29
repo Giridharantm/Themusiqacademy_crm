@@ -31,11 +31,10 @@ import { EditSubscriptionFields } from "@/components/edit-subscription-fields";
 import { PastSubscriptionFields } from "@/components/past-subscription-fields";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { EnrollBatchFields } from "@/components/enroll-batch-fields";
-import { SubscriptionPaymentFields } from "@/components/subscription-payment-fields";
+import { PaymentFormFields } from "@/components/payment-form-fields";
 import { SubmitButton } from "@/components/submit-button";
-import { recordSubscriptionPayment } from "@/lib/actions/billing-actions";
-import { needsInvoice } from "@/lib/invoice-payment";
-import { subscriptionTotals, countUsedClasses, attendanceForSubscription, addDays, PLAN_INVOICE_AMOUNTS } from "@/lib/subscription";
+import { recordStudentPayment, raiseInvoiceFromPayments } from "@/lib/actions/billing-actions";
+import { subscriptionTotals, countUsedClasses, attendanceForSubscription, addDays, PLAN_LABELS } from "@/lib/subscription";
 import { DAY_LABELS, formatTimeLabel } from "@/lib/schedule";
 import { format } from "date-fns";
 
@@ -64,10 +63,11 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         orderBy: { date: "desc" },
       },
       subscriptions: {
-        include: { bonusGrants: true, course: true, invoice: { include: { payments: true } } },
+        include: { bonusGrants: true, course: true },
         orderBy: { createdAt: "desc" },
       },
       invoices: { orderBy: { issueDate: "desc" }, include: { payments: true } },
+      payments: { orderBy: { paidDate: "desc" }, include: { course: true, invoice: { select: { id: true, invoiceNumber: true, status: true } } } },
       feedback: { orderBy: { date: "desc" }, take: 10, include: { teacher: true } },
       followUps: { orderBy: { followUpDate: "asc" } },
     },
@@ -80,6 +80,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const pendingFollowUps = student.followUps.filter((f) => !f.done);
 
   const batches = await prisma.batch.findMany({ include: { course: true }, orderBy: { name: "asc" } });
+  const courses = await prisma.course.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
 
   // Who WhatsApp class messages for this student go to, and whether each
   // number has agreed (consent is per phone number).
@@ -107,6 +108,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
     return batches.filter((b) => b.id === currentBatchId || !enrolledBatchIds.has(b.id));
   }
 
+  const uninvoiced = student.payments.filter((p) => !p.invoiceId && p.plan);
   const courseIdsWithActiveSubscription = student.subscriptions.filter((s) => s.status === "ACTIVE").map((s) => s.courseId);
 
   // Group enrollments by course — a subscription pools across every batch
@@ -240,43 +242,6 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                         <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-2">
                           No active subscription — add one below to start tracking classes.
                         </p>
-                      )}
-
-                      {activeSubscription?.invoice && (
-                        <p className="text-xs text-slate-600 mb-2">
-                          Invoice{" "}
-                          <Link href={`/admin/billing/${activeSubscription.invoice.id}`} className="text-indigo-600 hover:underline font-medium">
-                            {activeSubscription.invoice.invoiceNumber}
-                          </Link>
-                          {" · "}Rs. {activeSubscription.invoice.payments.reduce((s, p) => s + p.amount, 0).toLocaleString("en-IN")} of Rs.{" "}
-                          {activeSubscription.invoice.total.toLocaleString("en-IN")} paid{" · "}
-                          <Badge color={statusColors[activeSubscription.invoice.status]}>{activeSubscription.invoice.status}</Badge>
-                        </p>
-                      )}
-
-                      {activeSubscription && needsInvoice(activeSubscription) && (
-                        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-2">
-                          <p className="text-xs text-amber-800">No payment recorded for this subscription yet — recording it raises the invoice.</p>
-                          {student.invoices
-                            .filter((i) => i.status !== "CANCELLED" && i.issueDate.getTime() >= activeSubscription.createdAt.getTime() - 2 * 86_400_000)
-                            .map((i) => (
-                              <p key={i.id} className="text-xs text-amber-800 mt-1">
-                                Note: invoice {i.invoiceNumber} ({format(i.issueDate, "d MMM yyyy")}) was already raised for this student — check it isn&apos;t this same payment.
-                              </p>
-                            ))}
-                          <details className="mt-1" key={activeSubscription.id}>
-                            <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none font-medium">Record payment &amp; raise invoice</summary>
-                            <form action={recordSubscriptionPayment.bind(null, activeSubscription.id, student.id)} className="mt-2 max-w-sm">
-                              <SubscriptionPaymentFields
-                                price={activeSubscription.plan === "CUSTOM" ? null : PLAN_INVOICE_AMOUNTS[activeSubscription.plan]}
-                                defaultDueBy={format(addDays(new Date(), 7), "yyyy-MM-dd")}
-                              />
-                              <SubmitButton className="w-full mt-3" pendingText="Raising invoice…">
-                                Record payment &amp; raise invoice
-                              </SubmitButton>
-                            </form>
-                          </details>
-                        </div>
                       )}
 
                       <form className="flex items-end gap-2 mb-2">
@@ -436,7 +401,71 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           <Card>
-            <CardHeader title="Billing" subtitle="An invoice is raised when a payment is recorded on a subscription" />
+            <CardHeader title="Payments" subtitle="Record the money received, then raise the invoice against it" />
+            <CardBody className="border-b border-line">
+              <details key={student.payments.length}>
+                <summary className="text-sm text-indigo-600 hover:underline cursor-pointer list-none font-medium">+ Record a payment</summary>
+                <form action={recordStudentPayment.bind(null, student.id)} className="mt-3 max-w-md">
+                  <PaymentFormFields courses={courses} defaultStart={format(new Date(), "yyyy-MM-dd")} />
+                  <SubmitButton className="w-full mt-3" pendingText="Saving…">
+                    Save payment
+                  </SubmitButton>
+                </form>
+              </details>
+            </CardBody>
+            {student.payments.length === 0 ? (
+              <CardBody>
+                <EmptyState text="No payments recorded yet" />
+              </CardBody>
+            ) : (
+              <form action={raiseInvoiceFromPayments.bind(null, student.id)}>
+                <ul className="divide-y divide-line">
+                  {student.payments.map((p) => {
+                    const selectable = !p.invoiceId && !!p.plan;
+                    return (
+                      <li key={p.id} className="px-5 py-3 flex items-start gap-3">
+                        {selectable ? <input type="checkbox" name="paymentId" value={p.id} defaultChecked className="mt-1" aria-label="Include in the invoice" /> : <span className="w-[13px]" />}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-ink font-medium">
+                            Rs. {p.amount.toLocaleString("en-IN")}
+                            {p.course && p.plan ? ` · ${p.course.name} · ${PLAN_LABELS[p.plan]}` : ""}
+                          </p>
+                          <p className="text-xs text-muted">
+                            {format(p.paidDate, "d MMM yyyy")} · {p.method.replace("_", " ")}
+                            {p.reference ? ` · ${p.reference}` : ""}
+                            {p.startDate ? ` · from ${format(p.startDate, "d MMM yyyy")}` : ""}
+                            {p.discount > 0 ? ` · discount Rs. ${p.discount.toLocaleString("en-IN")}` : ""}
+                          </p>
+                          {p.note && <p className="text-xs text-muted">{p.note}</p>}
+                        </div>
+                        {p.invoice ? (
+                          <Link href={`/admin/billing/${p.invoice.id}`} className="text-xs text-indigo-600 hover:underline whitespace-nowrap">
+                            {p.invoice.invoiceNumber}
+                          </Link>
+                        ) : (
+                          <Badge color="yellow">Not invoiced</Badge>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                {uninvoiced.length > 0 && (
+                  <CardBody className="border-t border-line space-y-3">
+                    <p className="text-sm font-medium text-ink">Raise invoice against payment</p>
+                    <p className="text-xs text-muted">Tick the payments the invoice covers — together they make one invoice with a line for each.</p>
+                    <Input label="Printed on the invoice (optional)" name="invoiceNote" placeholder="e.g. 1-year package split across Guitar and Piano" />
+                    <Input label="If the payments don't cover the full fee, balance due by" name="balanceDueBy" type="date" defaultValue={format(addDays(new Date(), 7), "yyyy-MM-dd")} />
+                    <SubmitButton className="w-full" pendingText="Raising invoice…">
+                      Raise invoice against selected payments
+                    </SubmitButton>
+                  </CardBody>
+                )}
+              </form>
+            )}
+          </Card>
+
+          <Card>
+            <CardHeader title="Billing" subtitle="Invoices are raised against the payments above" />
             {student.invoices.length === 0 ? (
               <CardBody>
                 <EmptyState text="No invoices raised yet" />

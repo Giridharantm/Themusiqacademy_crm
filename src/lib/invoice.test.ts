@@ -61,6 +61,19 @@ describe("itemEnrolment", () => {
     expect(e.planLabel).toBe("3 Months enrolment");
   });
 
+  it("uses the plan and dates stored on the line, whatever the amount (a year paid at once, split over two instruments)", () => {
+    const e = itemEnrolment(
+      { description: "Guitar - 48 classes", amount: 20160, plan: "SIX_MONTHS", periodStart: new Date("2026-11-01"), periodEnd: new Date("2027-06-28") },
+      courses
+    );
+    expect(e).toMatchObject({ instrument: "Guitar", planLabel: "6 Months enrolment", validity: "8 months", classesLabel: null });
+  });
+
+  it("works out a custom package's validity from its dates", () => {
+    const e = itemEnrolment({ description: "Guitar - 10 classes", amount: 7500, plan: "CUSTOM", periodStart: new Date("2026-11-01"), periodEnd: new Date("2026-12-31") }, courses);
+    expect(e).toMatchObject({ planLabel: "Custom enrolment", classesLabel: null, validity: "2 months" });
+  });
+
   it("leaves plan details out for an amount that is not on the price list", () => {
     expect(itemEnrolment({ description: "Guitar fee", amount: 777 }, courses)).toEqual({
       instrument: "Guitar",

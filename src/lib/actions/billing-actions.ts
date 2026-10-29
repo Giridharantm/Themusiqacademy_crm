@@ -5,10 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/authz";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { DISCOUNT_STEPS } from "@/lib/subscription";
-import { invoiceFromPayment, needsInvoice, packagePrice, subscriptionInvoiceDescription } from "@/lib/invoice-payment";
-
-const ALLOWED_DISCOUNTS = new Set<number>([0, ...DISCOUNT_STEPS]);
+import { PLAN_INVOICE_AMOUNTS } from "@/lib/subscription";
+import { checkPayment, invoiceFromPayments, isPackagePlan, packageDescription, packageEnd, type PackagePlan } from "@/lib/invoice-payment";
 const PAYMENT_METHODS = ["CASH", "CARD", "UPI", "BANK_TRANSFER", "OTHER"] as const;
 type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
@@ -25,32 +23,84 @@ async function nextInvoiceNumber(db: Prisma.TransactionClient) {
   return `INV-${String((row?.max ?? 0) + 1).padStart(4, "0")}`;
 }
 
-// The only way an invoice is raised: recording the first payment on a
-// subscription. The invoice is created from that payment (so there is never an
-// invoice without money behind it) and linked to the subscription, which can
-// carry one invoice only — that link is unique in the database, so a second
-// invoice for the same subscription is impossible even on a double-click or
-// from two browser tabs. A payment smaller than the total leaves a balance,
-// which is then settled with "Record payment" on the invoice.
-export async function recordSubscriptionPayment(subscriptionId: string, studentId: string, formData: FormData) {
+// Records money received from a student, with what it is for: the instrument,
+// the package, when it starts, the discount given and how it was paid. No
+// invoice yet — that is raised afterwards, against the payment
+// (raiseInvoiceFromPayments).
+export async function recordStudentPayment(studentId: string, formData: FormData) {
   await requireRole("ADMIN");
 
-  const subscription = await prisma.subscription.findUnique({
-    where: { id: subscriptionId },
-    include: { course: true, bonusGrants: true },
+  const courseId = String(formData.get("courseId") ?? "");
+  const rawPlan = String(formData.get("plan") ?? "");
+  const startRaw = String(formData.get("startDate") ?? "");
+  if (!courseId || !isPackagePlan(rawPlan) || !startRaw) throw new Error("Instrument, package and start date are required");
+  const plan = rawPlan;
+
+  const [student, course] = await Promise.all([
+    prisma.student.findUnique({ where: { id: studentId }, select: { id: true } }),
+    prisma.course.findUnique({ where: { id: courseId }, select: { id: true } }),
+  ]);
+  if (!student || !course) throw new Error("Student or instrument not found");
+
+  const startDate = new Date(startRaw);
+  startDate.setHours(0, 0, 0, 0);
+  const discount = Number(formData.get("discount") ?? 0) || 0;
+  const amount = Number(formData.get("amount") ?? 0);
+  const problem = checkPayment({ plan, discount, amount });
+  if (problem) throw new Error(problem);
+
+  // One payment per package: further instalments go on its invoice, so the same
+  // package can never be invoiced twice.
+  const existing = await prisma.payment.findFirst({
+    where: { studentId, courseId, plan, startDate, OR: [{ invoiceId: null }, { invoice: { status: { not: "CANCELLED" } } }] },
+    include: { invoice: { select: { invoiceNumber: true } } },
   });
-  if (!subscription || subscription.studentId !== studentId) throw new Error("Subscription not found");
-  if (!needsInvoice(subscription)) throw new Error("This subscription already has an invoice, or isn't open for billing");
+  if (existing) {
+    throw new Error(
+      existing.invoice
+        ? `This package already has a payment and invoice (${existing.invoice.invoiceNumber}) — record any further payment on that invoice`
+        : "This package already has a payment recorded — raise its invoice, then record any further payment on the invoice"
+    );
+  }
 
-  const discount = Number(formData.get("discount") ?? 0);
-  if (!ALLOWED_DISCOUNTS.has(discount)) throw new Error("Invalid discount amount");
+  await prisma.payment.create({
+    data: {
+      studentId,
+      courseId,
+      plan,
+      startDate,
+      discount,
+      amount,
+      method: asMethod(String(formData.get("method") ?? "CASH")),
+      reference: String(formData.get("reference") ?? "").trim() || null,
+      note: String(formData.get("note") ?? "").trim() || null,
+    },
+  });
 
-  const price = packagePrice(subscription.plan, Number(formData.get("price") ?? 0));
-  const received = Number(formData.get("amount") ?? 0);
-  const method = asMethod(String(formData.get("method") ?? "CASH"));
-  const note = String(formData.get("note") ?? "").trim() || null;
+  revalidatePath(`/admin/students/${studentId}`);
+}
 
-  const result = invoiceFromPayment({ price, discount, received });
+// Raises an invoice against some of one student's payments: one line per
+// payment, the fee after discount as the total, the payments as what has been
+// paid (any shortfall stays as a balance). A payment can sit on one invoice
+// only — it is claimed inside the same transaction, so a double-click or a
+// second tab can't invoice it twice. Several payments (a year paid at once,
+// split over two instruments) become one invoice.
+export async function raiseInvoiceFromPayments(studentId: string, formData: FormData) {
+  await requireRole("ADMIN");
+
+  const ids = Array.from(new Set(formData.getAll("paymentId").map(String)));
+  if (ids.length === 0) throw new Error("Pick at least one payment to invoice");
+
+  const payments = await prisma.payment.findMany({
+    where: { id: { in: ids }, studentId, invoiceId: null, plan: { not: null }, startDate: { not: null } },
+    include: { course: { select: { name: true } } },
+    orderBy: { paidDate: "asc" },
+  });
+  if (payments.length !== ids.length) throw new Error("A selected payment is already invoiced, or isn't this student's");
+
+  const lines = payments.map((p) => ({ p, plan: p.plan as PackagePlan, start: p.startDate as Date }));
+  const result = invoiceFromPayments(lines.map((l) => ({ plan: l.plan, discount: l.p.discount, amount: l.p.amount })));
   if (!result.ok) throw new Error(result.error);
 
   const now = new Date();
@@ -61,8 +111,14 @@ export async function recordSubscriptionPayment(subscriptionId: string, studentI
     dueDate = new Date(raw);
   }
 
-  const bonusClasses = subscription.bonusGrants.reduce((sum, g) => sum + g.classes, 0);
-  const description = subscriptionInvoiceDescription(subscription.course.name, subscription.baseClasses, subscription.carryForwardClasses, bonusClasses);
+  const items = lines.map(({ p, plan, start }) => ({
+    description: packageDescription(p.course?.name ?? "Music class", plan),
+    amount: PLAN_INVOICE_AMOUNTS[plan],
+    plan,
+    periodStart: start,
+    periodEnd: packageEnd(start, plan),
+  }));
+  const invoiceNote = String(formData.get("invoiceNote") ?? "").trim() || null;
 
   let invoiceId: string | null = null;
   for (let attempt = 0; attempt < 3 && !invoiceId; attempt++) {
@@ -74,22 +130,22 @@ export async function recordSubscriptionPayment(subscriptionId: string, studentI
             studentId,
             issueDate: now,
             dueDate,
-            periodStart: subscription.startDate,
-            periodEnd: subscription.endDate,
-            discount,
+            periodStart: new Date(Math.min(...items.map((i) => i.periodStart.getTime()))),
+            periodEnd: new Date(Math.max(...items.map((i) => i.periodEnd.getTime()))),
+            discount: result.discount,
             amountWithoutGst: result.amountWithoutGst,
             cgstAmount: result.cgstAmount,
             sgstAmount: result.sgstAmount,
             total: result.total,
             status: result.status,
-            items: { create: [{ description, amount: price }] },
-            payments: { create: [{ amount: received, method, note, paidDate: now }] },
+            notes: invoiceNote,
+            items: { create: items },
           },
         });
-        // Claims the subscription only if nobody else has — if this loses the
+        // Claims the payments only if nobody else has — if this loses the
         // race, the whole invoice is rolled back.
-        const claimed = await tx.subscription.updateMany({ where: { id: subscriptionId, invoiceId: null }, data: { invoiceId: invoice.id } });
-        if (claimed.count !== 1) throw new Error("This subscription already has an invoice");
+        const claimed = await tx.payment.updateMany({ where: { id: { in: ids }, invoiceId: null }, data: { invoiceId: invoice.id } });
+        if (claimed.count !== ids.length) throw new Error("A selected payment is already invoiced");
         return invoice.id;
       });
     } catch (err) {
@@ -116,6 +172,7 @@ export async function recordPayment(invoiceId: string, formData: FormData) {
   const amount = Number(formData.get("amount") ?? 0);
   const method = asMethod(String(formData.get("method") ?? "CASH"));
   const note = String(formData.get("note") ?? "").trim() || null;
+  const reference = String(formData.get("reference") ?? "").trim() || null;
 
   if (!(amount > 0)) throw new Error("Payment amount must be greater than zero");
 
@@ -125,7 +182,7 @@ export async function recordPayment(invoiceId: string, formData: FormData) {
   const balance = existing.total - existing.payments.reduce((sum, p) => sum + p.amount, 0);
   if (amount > balance + 0.005) throw new Error("That is more than the balance due on this invoice");
 
-  await prisma.payment.create({ data: { invoiceId, amount, method, note } });
+  await prisma.payment.create({ data: { invoiceId, studentId: existing.studentId, amount, method, note, reference } });
 
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId }, include: { payments: true } });
   if (invoice) {
@@ -139,14 +196,16 @@ export async function recordPayment(invoiceId: string, formData: FormData) {
   revalidatePath("/admin");
 }
 
-// Voids the invoice and frees its subscription, so the correct payment can be
-// recorded on it and a fresh invoice raised.
+// Voids the invoice and frees its payments, so a correct invoice can be raised
+// against them.
 export async function cancelInvoice(invoiceId: string) {
   await requireRole("ADMIN");
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { studentId: true } });
   await prisma.$transaction([
     prisma.invoice.update({ where: { id: invoiceId }, data: { status: "CANCELLED" } }),
-    prisma.subscription.updateMany({ where: { invoiceId }, data: { invoiceId: null } }),
+    // Payments recorded from the student page go back to "not invoiced" so the
+    // right invoice can be raised against them; older payments stay as history.
+    prisma.payment.updateMany({ where: { invoiceId, plan: { not: null } }, data: { invoiceId: null } }),
   ]);
   revalidatePath(`/admin/billing/${invoiceId}`);
   revalidatePath("/admin/billing");

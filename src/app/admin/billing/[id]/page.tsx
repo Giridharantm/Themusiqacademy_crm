@@ -110,6 +110,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                   <li key={p.id} className="px-5 py-3 flex items-center justify-between text-sm">
                     <div>
                       <p className="text-slate-900">Rs. {p.amount.toLocaleString("en-IN")} via {p.method.replace("_", " ")}</p>
+                      {p.reference && <p className="text-xs text-slate-400">Ref: {p.reference}</p>}
                       {p.note && <p className="text-xs text-slate-400">{p.note}</p>}
                     </div>
                     <span className="text-xs text-slate-400">{format(p.paidDate, "d MMM yyyy")}</span>
@@ -154,6 +155,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                     <option value="BANK_TRANSFER">Bank transfer</option>
                     <option value="OTHER">Other</option>
                   </Select>
+                  <Input label="Transaction ID / reference" name="reference" />
                   <Input label="Note" name="note" />
                   <Button type="submit" className="w-full">Record payment</Button>
                 </form>

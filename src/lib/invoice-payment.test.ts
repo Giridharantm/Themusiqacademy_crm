@@ -1,54 +1,68 @@
 import { describe, it, expect } from "vitest";
-import { invoiceFromPayment, needsInvoice, packagePrice, subscriptionInvoiceDescription, PAYMENT_INVOICES_FROM } from "./invoice-payment";
+import { checkPayment, invoiceFromPayments, isPackagePlan, packageDescription, packageEnd } from "./invoice-payment";
 import { PLAN_INVOICE_AMOUNTS } from "./subscription";
 
-describe("packagePrice", () => {
-  it("uses the price list for a standard plan and the entered price for a custom one", () => {
-    expect(packagePrice("THREE_MONTHS", 0)).toBe(PLAN_INVOICE_AMOUNTS.THREE_MONTHS);
-    expect(packagePrice("ONE_YEAR", 999)).toBe(PLAN_INVOICE_AMOUNTS.ONE_YEAR);
-    expect(packagePrice("CUSTOM", 7500)).toBe(7500);
+describe("isPackagePlan", () => {
+  it("accepts the four priced plans only", () => {
+    expect(isPackagePlan("THREE_MONTHS")).toBe(true);
+    expect(isPackagePlan("CUSTOM")).toBe(false);
+    expect(isPackagePlan("nonsense")).toBe(false);
   });
 });
 
-describe("invoiceFromPayment", () => {
-  it("a full payment makes a paid invoice with the GST split", () => {
-    const r = invoiceFromPayment({ price: 13680, discount: 2000, received: 11680 });
-    expect(r).toMatchObject({ ok: true, total: 11680, balance: 0, status: "PAID" });
+describe("checkPayment", () => {
+  it("accepts the full fee after discount, or less for a part payment", () => {
+    expect(checkPayment({ plan: "THREE_MONTHS", discount: 0, amount: 13680 })).toBeNull();
+    expect(checkPayment({ plan: "THREE_MONTHS", discount: 2000, amount: 11680 })).toBeNull();
+    expect(checkPayment({ plan: "THREE_MONTHS", discount: 0, amount: 5000 })).toBeNull();
+  });
+
+  it("takes any discount amount, not just round steps", () => {
+    expect(checkPayment({ plan: "SIX_MONTHS", discount: 5760, amount: 20160 })).toBeNull();
+  });
+
+  it("refuses an overpayment, no payment and a bad discount", () => {
+    expect(checkPayment({ plan: "THREE_MONTHS", discount: 2000, amount: 13680 })).not.toBeNull();
+    expect(checkPayment({ plan: "THREE_MONTHS", discount: 0, amount: 0 })).not.toBeNull();
+    expect(checkPayment({ plan: "THREE_MONTHS", discount: -1, amount: 100 })).not.toBeNull();
+    expect(checkPayment({ plan: "THREE_MONTHS", discount: PLAN_INVOICE_AMOUNTS.THREE_MONTHS, amount: 100 })).not.toBeNull();
+  });
+});
+
+describe("invoiceFromPayments", () => {
+  it("one fully paid package makes a paid invoice with the GST split", () => {
+    const r = invoiceFromPayments([{ plan: "THREE_MONTHS", discount: 2000, amount: 11680 }]);
+    expect(r).toMatchObject({ ok: true, gross: 13680, discount: 2000, total: 11680, received: 11680, balance: 0, status: "PAID" });
     if (r.ok) {
       expect(r.amountWithoutGst).toBeCloseTo(9898.31, 2);
       expect(r.cgstAmount).toBeCloseTo(890.85, 2);
-      expect(r.sgstAmount).toBeCloseTo(890.85, 2);
     }
   });
 
-  it("a smaller payment leaves a balance and a partial invoice", () => {
-    expect(invoiceFromPayment({ price: 13680, discount: 0, received: 5000 })).toMatchObject({ ok: true, total: 13680, balance: 8680, status: "PARTIAL" });
+  it("a year paid at once and split over two instruments is one invoice", () => {
+    const r = invoiceFromPayments([
+      { plan: "SIX_MONTHS", discount: 5760, amount: 20160 },
+      { plan: "SIX_MONTHS", discount: 5760, amount: 20160 },
+    ]);
+    expect(r).toMatchObject({ ok: true, gross: 51840, discount: 11520, total: 40320, received: 40320, balance: 0, status: "PAID" });
   });
 
-  it("refuses an overpayment, a zero payment and a bad price or discount", () => {
-    expect(invoiceFromPayment({ price: 4800, discount: 0, received: 5000 })).toMatchObject({ ok: false });
-    expect(invoiceFromPayment({ price: 4800, discount: 0, received: 0 })).toMatchObject({ ok: false });
-    expect(invoiceFromPayment({ price: 0, discount: 0, received: 100 })).toMatchObject({ ok: false });
-    expect(invoiceFromPayment({ price: 4800, discount: 5000, received: 100 })).toMatchObject({ ok: false });
+  it("payments short of the fee leave a balance and a partial invoice", () => {
+    expect(invoiceFromPayments([{ plan: "THREE_MONTHS", discount: 0, amount: 5000 }])).toMatchObject({ ok: true, total: 13680, balance: 8680, status: "PARTIAL" });
   });
-});
 
-describe("needsInvoice", () => {
-  const after = new Date(PAYMENT_INVOICES_FROM.getTime() + 3_600_000);
-  const before = new Date(PAYMENT_INVOICES_FROM.getTime() - 3_600_000);
-
-  it("is true only for a current, unlinked subscription started under the new rule", () => {
-    expect(needsInvoice({ status: "ACTIVE", invoiceId: null, createdAt: after })).toBe(true);
-    expect(needsInvoice({ status: "ACTIVE", invoiceId: "inv1", createdAt: after })).toBe(false);
-    expect(needsInvoice({ status: "EXPIRED", invoiceId: null, createdAt: after })).toBe(false);
-    expect(needsInvoice({ status: "ACTIVE", invoiceId: null, createdAt: before })).toBe(false);
+  it("refuses no payments", () => {
+    expect(invoiceFromPayments([])).toMatchObject({ ok: false });
   });
 });
 
-describe("subscriptionInvoiceDescription", () => {
-  it("names the instrument and the classes in the package", () => {
-    expect(subscriptionInvoiceDescription("Guitar", 24, 0, 4)).toBe("Guitar - 24 classes + 4 bonus");
-    expect(subscriptionInvoiceDescription("Piano", 24, 3, 0)).toBe("Piano - 24 classes + 3 carried forward");
-    expect(subscriptionInvoiceDescription("Drums", 8, 0, 0)).toBe("Drums - 8 classes");
+describe("package helpers", () => {
+  it("describes the line with the instrument and class count", () => {
+    expect(packageDescription("Guitar", "THREE_MONTHS")).toBe("Guitar - 24 classes");
+    expect(packageDescription("Drums", "ONE_MONTH")).toBe("Drums - 8 classes");
+  });
+
+  it("ends a package after its plan's days", () => {
+    expect(packageEnd(new Date(2026, 10, 1), "THREE_MONTHS")).toEqual(new Date(2027, 2, 1)); // 120 days after 1 Nov 2026
   });
 });

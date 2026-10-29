@@ -156,6 +156,7 @@ model Course {
   leads         Lead[]
   subscriptions Subscription[]
   attendance    Attendance[]
+  payments      Payment[]
 }
 
 model Batch {
@@ -199,6 +200,7 @@ model Student {
   invoices      Invoice[]
   subscriptions Subscription[]
   attendance    Attendance[]
+  payments      Payment[]
   followUps     StudentFollowUp[]
   reminderSkips ReminderSkip[]
 }
@@ -352,16 +354,37 @@ model InvoiceItem {
   invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   description String
   amount      Float
+  // Set when the line bills a package paid for through the student's
+  // payments: what it was and its validity, frozen at invoicing time.
+  plan        SubscriptionPlan?
+  periodStart DateTime?
+  periodEnd   DateTime?
 }
 
 model Payment {
   id        String        @id @default(cuid())
-  invoiceId String
-  invoice   Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  // Empty until an invoice is raised against the payment; payments on
+  // older invoices always have one.
+  invoiceId String?
+  invoice   Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   amount    Float
   method    PaymentMethod @default(CASH)
   paidDate  DateTime      @default(now())
   note      String?
+
+  // Set on payments recorded from a student's page, which say what the money
+  // is for (instrument, package, start date, discount given) and carry the
+  // transaction id; the invoice is raised against them afterwards.
+  studentId String?
+  student   Student?          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId  String?
+  course    Course?           @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  plan      SubscriptionPlan?
+  startDate DateTime?
+  discount  Float             @default(0)
+  reference String?
+
+  @@index([studentId])
 }
 
 // ---- WhatsApp class reminders & notices --------------------------------
