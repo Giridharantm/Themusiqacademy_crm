@@ -31,7 +31,11 @@ import { EditSubscriptionFields } from "@/components/edit-subscription-fields";
 import { PastSubscriptionFields } from "@/components/past-subscription-fields";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { EnrollBatchFields } from "@/components/enroll-batch-fields";
-import { subscriptionTotals, countUsedClasses, attendanceForSubscription } from "@/lib/subscription";
+import { SubscriptionPaymentFields } from "@/components/subscription-payment-fields";
+import { SubmitButton } from "@/components/submit-button";
+import { recordSubscriptionPayment } from "@/lib/actions/billing-actions";
+import { needsInvoice } from "@/lib/invoice-payment";
+import { subscriptionTotals, countUsedClasses, attendanceForSubscription, addDays, PLAN_INVOICE_AMOUNTS } from "@/lib/subscription";
 import { DAY_LABELS, formatTimeLabel } from "@/lib/schedule";
 import { format } from "date-fns";
 
@@ -60,7 +64,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         orderBy: { date: "desc" },
       },
       subscriptions: {
-        include: { bonusGrants: true, course: true },
+        include: { bonusGrants: true, course: true, invoice: { include: { payments: true } } },
         orderBy: { createdAt: "desc" },
       },
       invoices: { orderBy: { issueDate: "desc" }, include: { payments: true } },
@@ -238,6 +242,43 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                         </p>
                       )}
 
+                      {activeSubscription?.invoice && (
+                        <p className="text-xs text-slate-600 mb-2">
+                          Invoice{" "}
+                          <Link href={`/admin/billing/${activeSubscription.invoice.id}`} className="text-indigo-600 hover:underline font-medium">
+                            {activeSubscription.invoice.invoiceNumber}
+                          </Link>
+                          {" · "}Rs. {activeSubscription.invoice.payments.reduce((s, p) => s + p.amount, 0).toLocaleString("en-IN")} of Rs.{" "}
+                          {activeSubscription.invoice.total.toLocaleString("en-IN")} paid{" · "}
+                          <Badge color={statusColors[activeSubscription.invoice.status]}>{activeSubscription.invoice.status}</Badge>
+                        </p>
+                      )}
+
+                      {activeSubscription && needsInvoice(activeSubscription) && (
+                        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-2">
+                          <p className="text-xs text-amber-800">No payment recorded for this subscription yet — recording it raises the invoice.</p>
+                          {student.invoices
+                            .filter((i) => i.status !== "CANCELLED" && i.issueDate.getTime() >= activeSubscription.createdAt.getTime() - 2 * 86_400_000)
+                            .map((i) => (
+                              <p key={i.id} className="text-xs text-amber-800 mt-1">
+                                Note: invoice {i.invoiceNumber} ({format(i.issueDate, "d MMM yyyy")}) was already raised for this student — check it isn&apos;t this same payment.
+                              </p>
+                            ))}
+                          <details className="mt-1" key={activeSubscription.id}>
+                            <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none font-medium">Record payment &amp; raise invoice</summary>
+                            <form action={recordSubscriptionPayment.bind(null, activeSubscription.id, student.id)} className="mt-2 max-w-sm">
+                              <SubscriptionPaymentFields
+                                price={activeSubscription.plan === "CUSTOM" ? null : PLAN_INVOICE_AMOUNTS[activeSubscription.plan]}
+                                defaultDueBy={format(addDays(new Date(), 7), "yyyy-MM-dd")}
+                              />
+                              <SubmitButton className="w-full mt-3" pendingText="Raising invoice…">
+                                Record payment &amp; raise invoice
+                              </SubmitButton>
+                            </form>
+                          </details>
+                        </div>
+                      )}
+
                       <form className="flex items-end gap-2 mb-2">
                         <div className="flex-1 max-w-[10rem]">
                           <Input label="Mark attendance for a date" name="date" type="date" defaultValue={format(new Date(), "yyyy-MM-dd")} required />
@@ -395,7 +436,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           <Card>
-            <CardHeader title="Billing" action={<Link href={`/admin/billing/new?studentId=${student.id}`} className="text-sm text-indigo-600 hover:underline">New invoice</Link>} />
+            <CardHeader title="Billing" subtitle="An invoice is raised when a payment is recorded on a subscription" />
             {student.invoices.length === 0 ? (
               <CardBody>
                 <EmptyState text="No invoices raised yet" />

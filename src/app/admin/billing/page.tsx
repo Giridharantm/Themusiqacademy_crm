@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { Card, CardBody, CardHeader, PageHeader, Badge, EmptyState, Button, StatCard } from "@/components/ui";
+import { Card, CardBody, CardHeader, PageHeader, Badge, EmptyState, StatCard } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
 import { normalizeSearchQuery } from "@/lib/search";
 import { paidInvoiceRevenue } from "@/lib/billing";
@@ -44,15 +44,8 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
     <div>
       <PageHeader
         title="Billing & Invoices"
-        subtitle="Track fees, dues and payments"
-        action={
-          <div className="flex items-center gap-2">
-            <SearchBox placeholder="Search invoices..." defaultValue={q} />
-            <Link href="/admin/billing/new">
-              <Button>New invoice</Button>
-            </Link>
-          </div>
-        }
+        subtitle="Track fees, dues and payments — invoices are raised by recording a payment on a student's subscription"
+        action={<SearchBox placeholder="Search invoices..." defaultValue={q} />}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">

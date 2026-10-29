@@ -146,7 +146,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
               <CardHeader title="Record payment" />
               <CardBody>
                 <form action={recordPayment.bind(null, invoice.id)} className="space-y-3">
-                  <Input label="Amount (Rs.)" name="amount" type="number" min="0" step="0.01" defaultValue={balance} required />
+                  <Input label="Amount (Rs.)" name="amount" type="number" min="0.01" max={balance} step="0.01" defaultValue={balance} required />
                   <Select label="Method" name="method" defaultValue="CASH">
                     <option value="CASH">Cash</option>
                     <option value="UPI">UPI</option>

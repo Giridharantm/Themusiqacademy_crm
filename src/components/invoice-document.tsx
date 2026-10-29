@@ -91,12 +91,12 @@ export function InvoiceDocument({ invoice, courseNames }: { invoice: InvoiceForD
                   <div key={item.id}>
                     {e.instrument && <p className="text-base font-semibold">{e.instrument}</p>}
                     {(e.planLabel || e.classesLabel) && <p className="mt-0.5 text-[0.8rem] text-muted">{[e.planLabel, e.classesLabel].filter(Boolean).join(" · ")}</p>}
-                    {e.validity && (
+                    {(e.validity || periodText) && (
                       <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border-[1.5px] border-gold bg-white px-3 py-2 text-[0.8rem]">
                         <span>
                           <b className="text-brand">Valid</b> {periodText ?? `for ${e.validity}`}
                         </span>
-                        {periodText && <span className="whitespace-nowrap rounded-full bg-brand px-2.5 py-0.5 text-xs font-semibold text-gold">{e.validity}</span>}
+                        {periodText && e.validity && <span className="whitespace-nowrap rounded-full bg-brand px-2.5 py-0.5 text-xs font-semibold text-gold">{e.validity}</span>}
                       </div>
                     )}
                   </div>
