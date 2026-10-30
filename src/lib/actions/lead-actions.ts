@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { nextStudentCode } from "@/lib/students";
 
 export async function createLead(formData: FormData) {
-  const user = await requireRole("ADMIN");
+  const user = await requireRole("ADMIN", "FRONT_DESK");
 
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
@@ -35,7 +35,7 @@ export async function createLead(formData: FormData) {
 }
 
 export async function updateLeadStatus(leadId: string, status: string) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
   await prisma.lead.update({
     where: { id: leadId },
     data: { status: status as "NEW" | "CONTACTED" | "TRIAL_SCHEDULED" | "TRIAL_COMPLETED" | "CONVERTED" | "LOST" },
@@ -50,7 +50,7 @@ export async function changeLeadStatus(leadId: string, formData: FormData) {
 }
 
 export async function updateLead(leadId: string, formData: FormData) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
 
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
@@ -83,7 +83,7 @@ export async function updateLead(leadId: string, formData: FormData) {
 }
 
 export async function addFollowUp(leadId: string, formData: FormData) {
-  const user = await requireRole("ADMIN");
+  const user = await requireRole("ADMIN", "FRONT_DESK");
 
   const note = String(formData.get("note") ?? "").trim();
   const followUpDateRaw = String(formData.get("followUpDate") ?? "");
@@ -111,7 +111,7 @@ export async function addFollowUp(leadId: string, formData: FormData) {
 // single click. Any corrections made here are also saved back onto the lead
 // record, so it stays the accurate source of what was actually verified.
 export async function convertLeadToStudent(leadId: string, formData: FormData) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
 
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!lead) throw new Error("Lead not found");

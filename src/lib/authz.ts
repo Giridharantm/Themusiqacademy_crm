@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 
-export type Role = "ADMIN" | "TEACHER" | "PARENT";
+export type Role = "ADMIN" | "TEACHER" | "PARENT" | "FRONT_DESK";
 
 export async function requireRole(...roles: Role[]) {
   const session = await auth();

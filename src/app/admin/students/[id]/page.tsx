@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { currentUser } from "@/lib/authz";
 import {
   addGuardian,
   removeGuardian,
@@ -74,6 +75,11 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   });
 
   if (!student) notFound();
+
+  // Front desk works the desk side of a student (admissions, attendance, payments,
+  // invoices); subscription changes, bonus classes, deletes and WhatsApp reminder
+  // controls stay with the admin.
+  const isAdmin = (await currentUser())?.role === "ADMIN";
 
   const todayDateOnly = new Date();
   todayDateOnly.setHours(0, 0, 0, 0);
@@ -210,9 +216,11 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                                   <Button type="submit" variant="secondary">Save</Button>
                                 </form>
                               </details>
-                              <form action={deleteEnrollment.bind(null, e.id, student.id)}>
-                                <Button type="submit" variant="ghost">Delete</Button>
-                              </form>
+                              {isAdmin && (
+                                <form action={deleteEnrollment.bind(null, e.id, student.id)}>
+                                  <Button type="submit" variant="ghost">Delete</Button>
+                                </form>
+                              )}
                             </div>
                           </li>
                         ))}
@@ -228,6 +236,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                               batches={allAvailableBatches.filter((b) => b.courseId === courseId)}
                               courseIdsWithActiveSubscription={courseIdsWithActiveSubscription}
                               defaultStartDate={format(new Date(), "yyyy-MM-dd")}
+                              allowBonus={isAdmin}
                               lockedCourseId={courseId}
                             />
                           </form>
@@ -287,7 +296,8 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                             {pastSubscriptions.map((s) => (
                               <li key={s.id} className="bg-slate-50 rounded-md p-3">
                                 <SubscriptionProgress subscription={s} attendance={pooledAttendance} />
-                                <div className="flex items-center gap-3 mt-2">
+                                {isAdmin && (
+<div className="flex items-center gap-3 mt-2">
                                   <details className="text-xs">
                                     <summary className="text-indigo-600 hover:underline cursor-pointer list-none">Edit</summary>
                                     <form action={updateClosedSubscription.bind(null, s.id, student.id)} className="mt-2 max-w-sm">
@@ -310,13 +320,15 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                                     </ConfirmSubmitButton>
                                   </form>
                                 </div>
+)}
                               </li>
                             ))}
                           </ul>
                         </details>
                       )}
 
-                      <details className="mb-2" key={`past-${pastSubscriptions.length}`}>
+                      {isAdmin && (
+<details className="mb-2" key={`past-${pastSubscriptions.length}`}>
                         <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none">+ Add a past subscription</summary>
                         <p className="text-xs text-slate-400 mt-1 mb-2 max-w-sm">
                           For a cycle that already ended before it was entered here — logs its own plan, dates, and completed count without touching the current subscription.
@@ -326,8 +338,10 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                           <Button type="submit" variant="secondary" className="w-full">Add past subscription</Button>
                         </form>
                       </details>
+)}
 
-                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                      {isAdmin && (
+<div className="flex flex-wrap items-center gap-2 mb-3">
                         {activeSubscription && (
                           <>
                             <details className="inline-block" key={activeSubscription.bonusGrants.length}>
@@ -369,8 +383,10 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                           </>
                         )}
                       </div>
+)}
 
-                      <details className="mb-1" key={activeSubscription?.id ?? `new-${courseId}`}>
+                      {isAdmin && (
+<details className="mb-1" key={activeSubscription?.id ?? `new-${courseId}`}>
                         <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none">
                           {activeSubscription ? "Renew / change subscription" : "Add subscription"}
                         </summary>
@@ -381,6 +397,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                           </Button>
                         </form>
                       </details>
+)}
                     </li>
                   );
                 })}
@@ -394,6 +411,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                     batches={availableBatches}
                     courseIdsWithActiveSubscription={courseIdsWithActiveSubscription}
                     defaultStartDate={format(new Date(), "yyyy-MM-dd")}
+                    allowBonus={isAdmin}
                   />
                 </form>
               </CardBody>
@@ -589,7 +607,8 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             </CardBody>
           </Card>
 
-          <Card>
+          {isAdmin && (
+<Card>
             <CardHeader
               title="WhatsApp reminders"
               subtitle="Class reminders and notices go to the parent or guardian's number (or the student's own, if there is none). A family agrees by messaging 70901 20000 — or tick it here if they agreed in person or on a form."
@@ -640,6 +659,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
               </ul>
             )}
           </Card>
+)}
         </div>
       </div>
     </div>

@@ -29,6 +29,7 @@ export function SubscriptionFormFields({
   currentRemaining,
   hideStartDate,
   fieldPrefix = "",
+  allowBonus = true,
 }: {
   defaultStartDate?: string;
   /** Remaining classes on the subscription being renewed, or undefined if this is a brand new one. */
@@ -37,6 +38,8 @@ export function SubscriptionFormFields({
   hideStartDate?: boolean;
   /** Prepended to every field's name — lets several instances of this form coexist in one submission (e.g. enrolling into batches across multiple instruments at once, one subscription block per instrument). */
   fieldPrefix?: string;
+  /** Bonus classes and classes-already-used are the admin's to grant; hide them for anyone else. */
+  allowBonus?: boolean;
 }) {
   const [plan, setPlan] = useState<SubscriptionPlan>("ONE_MONTH");
   const [customClasses, setCustomClasses] = useState(0);
@@ -103,6 +106,8 @@ export function SubscriptionFormFields({
         />
       )}
 
+      {allowBonus && (
+        <>
       <Input
         label="Bonus classes"
         name={`${fieldPrefix}bonusClasses`}
@@ -113,8 +118,10 @@ export function SubscriptionFormFields({
         placeholder="0"
       />
       {bonusClasses > 0 && <Textarea label="Bonus reason" name={`${fieldPrefix}bonusReason`} placeholder="e.g. Diwali offer" />}
+        </>
+      )}
 
-      {isNewSubscription && (
+      {allowBonus && isNewSubscription && (
         <Input
           label="Classes already used (if any)"
           name={`${fieldPrefix}classesUsedAtMigration`}

@@ -8,7 +8,7 @@ import { PLAN_CLASSES, PLAN_DAYS, addDays, type SubscriptionPlan } from "@/lib/s
 import bcrypt from "bcryptjs";
 
 export async function createStudent(formData: FormData) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
 
   const name = String(formData.get("name") ?? "").trim();
   const dobRaw = String(formData.get("dob") ?? "");
@@ -36,14 +36,14 @@ export async function createStudent(formData: FormData) {
 }
 
 export async function updateStudentStatus(studentId: string, status: string) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
   await prisma.student.update({ where: { id: studentId }, data: { status } });
   revalidatePath(`/admin/students/${studentId}`);
   revalidatePath("/admin/students");
 }
 
 export async function addGuardian(studentId: string, formData: FormData) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
 
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
@@ -70,7 +70,7 @@ export async function addGuardian(studentId: string, formData: FormData) {
 }
 
 export async function removeGuardian(studentId: string, userId: string) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
   await prisma.studentGuardian.delete({ where: { studentId_userId: { studentId, userId } } });
   revalidatePath(`/admin/students/${studentId}`);
 }
@@ -86,7 +86,7 @@ export async function removeGuardian(studentId: string, userId: string) {
 // day-slot of an instrument the student's already subscribed to) just draws
 // from the existing pooled package and needs no subscription fields.
 export async function enrollInBatch(studentId: string, formData: FormData) {
-  const user = await requireRole("ADMIN");
+  const user = await requireRole("ADMIN", "FRONT_DESK");
 
   const batchIds = formData.getAll("batchIds").map(String).filter(Boolean);
   if (batchIds.length === 0) throw new Error("At least one batch is required");
@@ -125,13 +125,16 @@ export async function enrollInBatch(studentId: string, formData: FormData) {
     const endDateRaw = String(formData.get(`${prefix}endDate`) ?? "");
     const endDate = endDateRaw ? new Date(endDateRaw) : plan === "CUSTOM" ? null : addDays(startDate, PLAN_DAYS[plan]);
 
-    const classesUsedAtMigration = Math.max(0, Number(formData.get(`${prefix}classesUsedAtMigration`) ?? 0));
+    // Bonus classes and classes already used are the admin's call — front desk
+    // enrols at the standard package.
+    const isAdmin = user.role === "ADMIN";
+    const classesUsedAtMigration = isAdmin ? Math.max(0, Number(formData.get(`${prefix}classesUsedAtMigration`) ?? 0)) : 0;
 
     const subscription = await prisma.subscription.create({
       data: { studentId, courseId, plan, baseClasses, startDate, endDate, status: "ACTIVE", classesUsedAtMigration },
     });
 
-    const bonusClasses = Number(formData.get(`${prefix}bonusClasses`) ?? 0);
+    const bonusClasses = isAdmin ? Number(formData.get(`${prefix}bonusClasses`) ?? 0) : 0;
     const bonusReason = String(formData.get(`${prefix}bonusReason`) ?? "").trim() || null;
     if (bonusClasses > 0) {
       await prisma.bonusGrant.create({
@@ -152,7 +155,7 @@ export async function enrollInBatch(studentId: string, formData: FormData) {
 // subscription exactly as it was — the destination course's own "no active
 // subscription" banner prompts for a new one, same as any fresh enrollment.
 export async function updateEnrollmentBatch(enrollmentId: string, studentId: string, formData: FormData) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
 
   const newBatchId = String(formData.get("batchId") ?? "");
   if (!newBatchId) throw new Error("A batch is required");
@@ -184,7 +187,7 @@ export async function deleteEnrollment(enrollmentId: string, studentId: string) 
 }
 
 export async function updateEnrollmentStatus(enrollmentId: string, studentId: string, status: string) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
   await prisma.enrollment.update({
     where: { id: enrollmentId },
     data: {
@@ -199,7 +202,7 @@ export async function updateEnrollmentStatus(enrollmentId: string, studentId: st
 // subscription lapsed or is ending, but they're away or asked to be
 // contacted later rather than renewing right now.
 export async function addStudentFollowUp(studentId: string, formData: FormData) {
-  const user = await requireRole("ADMIN");
+  const user = await requireRole("ADMIN", "FRONT_DESK");
 
   const note = String(formData.get("note") ?? "").trim();
   const followUpDateRaw = String(formData.get("followUpDate") ?? "");
@@ -215,7 +218,7 @@ export async function addStudentFollowUp(studentId: string, formData: FormData) 
 }
 
 export async function markStudentFollowUpDone(followUpId: string, studentId: string) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
   await prisma.studentFollowUp.update({ where: { id: followUpId }, data: { done: true } });
   revalidatePath(`/admin/students/${studentId}`);
   revalidatePath("/admin");

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { currentUser } from "@/lib/authz";
 import { Card, CardBody, CardHeader, PageHeader, StatCard, EmptyState, Badge, Button } from "@/components/ui";
 import { markStudentFollowUpDone } from "@/lib/actions/student-actions";
 import { subscriptionTotals, countUsedClasses, attendanceForSubscription } from "@/lib/subscription";
@@ -20,6 +21,7 @@ const LOW_CLASSES_THRESHOLD = 6;
 const IRREGULAR_DAYS = 20;
 
 export default async function AdminDashboard() {
+  const isAdmin = (await currentUser())?.role === "ADMIN";
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -156,7 +158,7 @@ export default async function AdminDashboard() {
         <StatCard label="Active students" value={activeStudents} href="/admin/students?status=ACTIVE" />
         <StatCard label="Renewals due soon" value={renewalsDueSoon} hint={`Fewer than ${LOW_CLASSES_THRESHOLD} classes remaining`} href="/admin/students?renewal=under6" />
         <StatCard label="Classes today" value={todaysBatches.length} href={`/admin/batches?day=${todayCode}`} />
-        <StatCard label="Revenue this month" value={`Rs. ${revenueThisMonth.toLocaleString("en-IN")}`} hint="Paid invoices raised this month" href="/admin/billing" />
+        {isAdmin && <StatCard label="Revenue this month" value={`Rs. ${revenueThisMonth.toLocaleString("en-IN")}`} hint="Paid invoices raised this month" href="/admin/billing" />}
         <StatCard label="Outstanding dues" value={`Rs. ${outstandingDues.toLocaleString("en-IN")}`} hint="Pending, partial & overdue invoices" href="/admin/billing" />
       </div>
 

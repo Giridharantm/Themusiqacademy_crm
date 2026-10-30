@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { currentUser } from "@/lib/authz";
 import { Card, CardBody, CardHeader, PageHeader, Badge, EmptyState, StatCard } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
 import { normalizeSearchQuery } from "@/lib/search";
@@ -15,6 +16,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default async function BillingPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const isAdmin = (await currentUser())?.role === "ADMIN";
   const q = normalizeSearchQuery((await searchParams).q);
 
   const invoices = await prisma.invoice.findMany({
@@ -50,7 +52,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <StatCard label="Outstanding dues" value={`Rs. ${pendingTotal.toLocaleString("en-IN")}`} />
-        <StatCard label="Revenue this month" value={`Rs. ${revenueThisMonth.toLocaleString("en-IN")}`} hint="Paid invoices raised this month" />
+        {isAdmin && <StatCard label="Revenue this month" value={`Rs. ${revenueThisMonth.toLocaleString("en-IN")}`} hint="Paid invoices raised this month" />}
       </div>
 
       <Card>

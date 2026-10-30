@@ -19,12 +19,15 @@ export function EnrollBatchFields({
   courseIdsWithActiveSubscription,
   defaultStartDate,
   lockedCourseId,
+  allowBonus = true,
 }: {
   batches: BatchOption[];
   courseIdsWithActiveSubscription: string[];
   defaultStartDate?: string;
   /** Restricts this picker to one instrument and hides the Instrument selector — used for "add another day" inline within a course the student's already enrolled in, so it shows up together with that instrument's existing batches instead of in the separate new-instrument form. */
   lockedCourseId?: string;
+  /** Whether the bonus-classes and classes-already-used fields are offered (admin only). */
+  allowBonus?: boolean;
 }) {
   // A subscription's plan (e.g. 8 classes/month) is usually spread across a
   // couple of day-slots a week — so enrolling should let you queue up every
@@ -154,7 +157,7 @@ export function EnrollBatchFields({
           <p className="text-xs text-slate-500 mb-2">
             No active {name} subscription yet — set one up for this enrollment:
           </p>
-          <SubscriptionFormFields fieldPrefix={`sub_${id}_`} hideStartDate />
+          <SubscriptionFormFields fieldPrefix={`sub_${id}_`} hideStartDate allowBonus={allowBonus} />
         </div>
       ))}
 

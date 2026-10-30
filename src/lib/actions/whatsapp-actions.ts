@@ -51,7 +51,7 @@ export async function setPhoneConsent(studentId: string, phone: string, optedIn:
 // only inside WhatsApp's 24-hour reply window; the page re-renders with the
 // reason if WhatsApp (or the window rule) refuses it.
 export async function sendInboxReply(formData: FormData) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
   const phone = normalizePhone(String(formData.get("phone") ?? ""));
   if (!phone) throw new Error("That phone number is not valid");
 
@@ -64,7 +64,7 @@ export async function sendInboxReply(formData: FormData) {
 
 // Called when a conversation is opened, so the unread badge clears.
 export async function markInboxRead(phone: string) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
   const normalized = normalizePhone(phone);
   if (!normalized) return;
   await markConversationRead(normalized);
@@ -104,7 +104,7 @@ export async function setStudentRemindersOff(studentId: string, off: boolean) {
 // conversation and ignores everything it sends from now on. The lead it may
 // have created is left for staff to delete.
 export async function markNumberAsSpam(phone: string) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
   const normalized = normalizePhone(phone);
   if (!normalized) throw new Error("That phone number is not valid");
   const result = await blockNumber(normalized);
@@ -116,7 +116,7 @@ export async function markNumberAsSpam(phone: string) {
 }
 
 export async function unblockNumberAction(phone: string) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
   const normalized = normalizePhone(phone);
   if (!normalized) throw new Error("That phone number is not valid");
   const result = await unblockNumber(normalized);

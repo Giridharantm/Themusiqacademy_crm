@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { currentUser } from "@/lib/authz";
 import { createBatch, updateBatch, deleteBatch } from "@/lib/actions/batch-actions";
 import { Card, CardBody, CardHeader, PageHeader, Input, Select, Button, EmptyState, Badge } from "@/components/ui";
 import { BatchScheduleFields } from "@/components/batch-schedule-fields";
@@ -11,6 +12,7 @@ export default async function BatchesPage({
 }: {
   searchParams: Promise<{ courseId?: string; day?: string; time?: string }>;
 }) {
+  const isAdmin = (await currentUser())?.role === "ADMIN";
   const { courseId: filterCourseId, day: filterDay, time: filterTime } = await searchParams;
 
   const [allBatchesRaw, courses, teachers] = await Promise.all([
@@ -85,12 +87,15 @@ export default async function BatchesPage({
                       </Link>
                       <div className="flex items-center gap-2">
                         <Badge>{b._count.enrollments} student{b._count.enrollments !== 1 ? "s" : ""}</Badge>
-                        <form action={deleteBatch.bind(null, b.id)}>
-                          <Button type="submit" variant="ghost">Delete</Button>
-                        </form>
+                        {isAdmin && (
+                          <form action={deleteBatch.bind(null, b.id)}>
+                            <Button type="submit" variant="ghost">Delete</Button>
+                          </form>
+                        )}
                       </div>
                     </div>
-                    <details className="mt-1.5" key={`${b.dayOfWeek}-${b.startTime}-${b.teacherId}-${b.room}`}>
+                    {isAdmin && (
+<details className="mt-1.5" key={`${b.dayOfWeek}-${b.startTime}-${b.teacherId}-${b.room}`}>
                       <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none">Edit</summary>
                       <form action={updateBatch.bind(null, b.id)} className="mt-2 space-y-3 max-w-sm">
                         <Select label="Teacher" name="teacherId" defaultValue={b.teacherId ?? ""}>
@@ -104,6 +109,7 @@ export default async function BatchesPage({
                         <Button type="submit" variant="secondary" className="w-full">Save changes</Button>
                       </form>
                     </details>
+)}
                   </li>
                 ))}
               </ul>
@@ -111,7 +117,8 @@ export default async function BatchesPage({
           </Card>
         </div>
 
-        <Card className="h-fit">
+        {isAdmin && (
+<Card className="h-fit">
           <CardHeader title="New batch" />
           <CardBody>
             <form action={createBatch} className="space-y-3">
@@ -133,6 +140,7 @@ export default async function BatchesPage({
             </form>
           </CardBody>
         </Card>
+)}
       </div>
     </div>
   );

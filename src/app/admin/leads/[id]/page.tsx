@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { currentUser } from "@/lib/authz";
 import { addFollowUp, changeLeadStatus, convertLeadToStudent, deleteLead, updateLead } from "@/lib/actions/lead-actions";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Input, Select, Textarea, Button } from "@/components/ui";
 import { CloseDetailsButton } from "@/components/close-details-button";
@@ -18,6 +19,7 @@ const summaryButtonClass =
   "inline-flex w-full items-center justify-center gap-1.5 px-3.5 py-2 rounded-md text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer list-none";
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const isAdmin = (await currentUser())?.role === "ADMIN";
   const { id } = await params;
 
   const [lead, courses] = await Promise.all([
@@ -197,13 +199,15 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             </Card>
           )}
 
-          <Card>
-            <CardBody>
-              <form action={deleteLead.bind(null, lead.id)}>
-                <Button type="submit" variant="danger" className="w-full">Delete lead</Button>
-              </form>
-            </CardBody>
-          </Card>
+          {isAdmin && (
+            <Card>
+              <CardBody>
+                <form action={deleteLead.bind(null, lead.id)}>
+                  <Button type="submit" variant="danger" className="w-full">Delete lead</Button>
+                </form>
+              </CardBody>
+            </Card>
+          )}
         </div>
       </div>
     </div>

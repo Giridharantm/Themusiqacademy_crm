@@ -28,7 +28,7 @@ async function nextInvoiceNumber(db: Prisma.TransactionClient) {
 // invoice yet — that is raised afterwards, against the payment
 // (raiseInvoiceFromPayments).
 export async function recordStudentPayment(studentId: string, formData: FormData) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
 
   const courseId = String(formData.get("courseId") ?? "");
   const rawPlan = String(formData.get("plan") ?? "");
@@ -87,7 +87,7 @@ export async function recordStudentPayment(studentId: string, formData: FormData
 // second tab can't invoice it twice. Several payments (a year paid at once,
 // split over two instruments) become one invoice.
 export async function raiseInvoiceFromPayments(studentId: string, formData: FormData) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
 
   const ids = Array.from(new Set(formData.getAll("paymentId").map(String)));
   if (ids.length === 0) throw new Error("Pick at least one payment to invoice");
@@ -167,7 +167,7 @@ export async function raiseInvoiceFromPayments(studentId: string, formData: Form
 // Records a further payment on an existing invoice (the balance of a part
 // payment, or an older invoice that was raised before any money came in).
 export async function recordPayment(invoiceId: string, formData: FormData) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
 
   const amount = Number(formData.get("amount") ?? 0);
   const method = asMethod(String(formData.get("method") ?? "CASH"));

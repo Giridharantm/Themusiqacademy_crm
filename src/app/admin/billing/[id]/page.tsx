@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { currentUser } from "@/lib/authz";
 import { recordPayment, cancelInvoice, deleteInvoice } from "@/lib/actions/billing-actions";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Input, Select, Button, EmptyState } from "@/components/ui";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
@@ -15,6 +16,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const isAdmin = (await currentUser())?.role === "ADMIN";
   const { id } = await params;
 
   const invoice = await prisma.invoice.findUnique({
@@ -163,7 +165,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             </Card>
           )}
 
-          {invoice.status !== "CANCELLED" && (
+          {isAdmin && invoice.status !== "CANCELLED" && (
             <Card>
               <CardHeader
                 title={invoice.payments.length > 0 ? "Raised in error?" : "Void this invoice"}
@@ -187,7 +189,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             </Card>
           )}
 
-          {invoice.payments.length === 0 && (
+          {isAdmin && invoice.payments.length === 0 && (
             <Card>
               <CardHeader title="Raised in error?" subtitle="Only possible before any payment is recorded" />
               <CardBody>

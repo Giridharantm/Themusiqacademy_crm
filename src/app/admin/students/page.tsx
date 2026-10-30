@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { currentUser } from "@/lib/authz";
 import { createStudent } from "@/lib/actions/student-actions";
 import { Card, CardBody, CardHeader, PageHeader, Input, Select, Button, EmptyState, Badge } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
@@ -16,6 +17,7 @@ export default async function StudentsPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; courseId?: string; renewal?: string; sort?: string }>;
 }) {
+  const isAdmin = (await currentUser())?.role === "ADMIN";
   const { q: rawQ, status, courseId, renewal, sort } = await searchParams;
   const q = normalizeSearchQuery(rawQ);
 
@@ -34,7 +36,7 @@ export default async function StudentsPage({
         action={
           <div className="flex items-center gap-3 flex-wrap">
             <SearchBox placeholder="Search by name, ID, phone..." defaultValue={q} extraParams={{ status, courseId, renewal, sort }} />
-            <DownloadCsvLink href="/admin/students/export" params={{ q, status, courseId, renewal, sort }} />
+            {isAdmin && <DownloadCsvLink href="/admin/students/export" params={{ q, status, courseId, renewal, sort }} />}
           </div>
         }
       />

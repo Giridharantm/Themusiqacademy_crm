@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { canAccessAdminPath } from "@/lib/permissions";
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
@@ -11,8 +12,9 @@ export default auth((req) => {
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith("/admin") && role !== "ADMIN") {
-    return NextResponse.redirect(new URL("/", req.nextUrl.origin));
+  if (pathname.startsWith("/admin") && !canAccessAdminPath(role, pathname)) {
+    // Front desk lands back on its own dashboard; anyone else goes home.
+    return NextResponse.redirect(new URL(role === "FRONT_DESK" ? "/admin" : "/", req.nextUrl.origin));
   }
   if (pathname.startsWith("/teacher") && role !== "TEACHER") {
     return NextResponse.redirect(new URL("/", req.nextUrl.origin));

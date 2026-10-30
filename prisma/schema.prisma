@@ -11,6 +11,7 @@ enum Role {
   ADMIN
   TEACHER
   PARENT
+  FRONT_DESK
 }
 
 enum LeadSource {

@@ -4,6 +4,7 @@ import { currentUser } from "@/lib/authz";
 
 const HOME_BY_ROLE: Record<string, string> = {
   ADMIN: "/admin",
+  FRONT_DESK: "/admin",
   TEACHER: "/teacher",
   PARENT: "/parent",
 };

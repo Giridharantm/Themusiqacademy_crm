@@ -4,7 +4,7 @@ import { currentUser } from "@/lib/authz";
 export default async function Home() {
   const user = await currentUser();
   if (!user) redirect("/login");
-  if (user.role === "ADMIN") redirect("/admin");
+  if (user.role === "ADMIN" || user.role === "FRONT_DESK") redirect("/admin");
   if (user.role === "TEACHER") redirect("/teacher");
   redirect("/parent");
 }

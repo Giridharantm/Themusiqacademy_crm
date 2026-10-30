@@ -12,13 +12,13 @@ function revalidateAttendance(studentId: string) {
 }
 
 export async function markStudentPresentAsAdmin(studentId: string, courseId: string, dateStr: string) {
-  const user = await requireRole("ADMIN");
+  const user = await requireRole("ADMIN", "FRONT_DESK");
   await markStudentPresent(studentId, courseId, dateStr, user.id);
   revalidateAttendance(studentId);
 }
 
 export async function unmarkStudentAsAdmin(studentId: string, courseId: string, dateStr: string) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
   await unmarkStudentAttendance(studentId, courseId, dateStr);
   revalidateAttendance(studentId);
 }
@@ -27,14 +27,14 @@ export async function unmarkStudentAsAdmin(studentId: string, courseId: string, 
 // picks directly, rather than going through the day's whole class roster —
 // useful for backfilling a missed mark or correcting a specific date.
 export async function markAttendanceOnDateAsAdmin(studentId: string, courseId: string, formData: FormData) {
-  const user = await requireRole("ADMIN");
+  const user = await requireRole("ADMIN", "FRONT_DESK");
   const dateStr = String(formData.get("date") ?? "");
   await markStudentPresent(studentId, courseId, dateStr, user.id);
   revalidateAttendance(studentId);
 }
 
 export async function removeAttendanceOnDateAsAdmin(studentId: string, courseId: string, formData: FormData) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
   const dateStr = String(formData.get("date") ?? "");
   await unmarkStudentAttendance(studentId, courseId, dateStr);
   revalidateAttendance(studentId);

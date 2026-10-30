@@ -79,6 +79,22 @@ An `INACTIVE` student never shows up in a batch's roster, its student count, or 
 7. **Teachers** log in separately, see only their own batches and students, mark attendance, assign homework, and leave feedback. Manage teacher accounts from `/admin/teachers` — see "Managing teachers" below.
 8. **Learners** (the student, a parent or a guardian — the site calls it the *learner login*) sign in and see the linked student's subscription progress, attendance history, pending/paid invoices, homework and teacher feedback — read only. On the student's page the admin adds these under **Learner logins** (name, email, relation: Mother / Father / Guardian / Student (self)). Internally the role is still named `PARENT` and the screens live under `/parent` — only the wording shown to people changed; renaming the role would need a data migration for no visible benefit.
 
+## Front desk logins
+
+A fourth role, `FRONT_DESK`, is for the person at the desk. The admin creates the logins on **Staff** (`/admin/staff`, admin only): name, email, phone and a password of 8+ characters (there is no default password); a login can be deactivated (it stops signing in at once, history stays) and given a new password. Front desk uses the same `/admin` screens with a shorter menu — Dashboard, Leads, Students, Attendance, Batches, Billing, Inbox.
+
+| Area | Front desk can | Front desk cannot |
+|---|---|---|
+| Leads | add, update, log follow-ups, change status, convert to a student | delete a lead |
+| Students | view, add, edit learner logins (guardians), enrol in a batch (a new instrument's package is created at the standard price), mark active/inactive, follow-ups | delete an enrolment; give bonus classes or "classes already used" when enrolling; renew, edit, cancel or delete subscriptions; add past subscriptions; the WhatsApp reminders card; the CSV download |
+| Attendance | mark and correct | — |
+| Batches | view | create, edit, delete |
+| Billing | record payments (including any discount), raise invoices, record a balance on an invoice, view and print; the outstanding-dues figure | cancel or delete an invoice; the revenue figure |
+| WhatsApp inbox | read, reply, mark a number as spam / unblock | — |
+| Not available at all | — | Reports (and every CSV export), revenue and GST, Teachers, Courses, Staff, the WhatsApp overview, class-reminder controls and sending notices |
+
+It is enforced twice: `canAccessAdminPath()` in `src/lib/permissions.ts` (used by `src/middleware.ts`, so a hidden page's address just returns to the dashboard) and `requireRole("ADMIN", "FRONT_DESK")` on each allowed server action — every other action is `requireRole("ADMIN")`. `src/lib/actions/permissions.test.ts` lists both sets, so widening an admin-only action by accident fails the tests. To open something to front desk, add its path to `FRONT_DESK_AREAS`, change the action's role check, hide admin-only controls with `isAdmin` on the page, and update that test.
+
 ## Managing teachers
 
 `/admin/teachers/[id]` (click through from the teachers list) is where you edit, deactivate, reassign, or delete a teacher:
@@ -180,7 +196,7 @@ docker compose up --build -d
 
 - **Database**: Postgres via Prisma (`prisma/schema.prisma`). Local dev also just points `DATABASE_URL` at Postgres (e.g. `docker compose up -d db`) — there's no SQLite fallback anymore.
 - **UI theme**: the same brand look as the marketing website (the "navy + pink + gold" palette) — navy (`#1F283C`) header and ink, **one pink for every action** (buttons, links, focus rings), gold accents (the gold top edge on cards) and a soft warm-beige page, with **Cinzel** for headings/page titles/figures and **Jost** for text (Jost sets small, so the root font size is 106.25%). Colors are CSS custom properties in `src/app/globals.css`'s `@theme` block: the named tokens `brand`, `brand-dark`, `accent`, `accent-dark`, `gold`, `page`, `panel`, `ink`, `muted`, `line` (used as `bg-brand`, `text-muted`, `border-line` …), plus a retint of Tailwind's own `indigo` scale (now the accent pink — text links, focus rings) and `slate` scale (warm greys with a charcoal ink) so most of the app picked it up automatically. Status colours (green/amber/red badges, error text) stay on Tailwind's defaults on purpose. The logo (`BrandLockup` in `src/components/brand.tsx`, images in `public/logo-emblem*.png` (named so; a renamed file busts the 4-hour browser cache of Next's resized copies), tab icons `src/app/icon.png` / `apple-icon.png`) is the pearl-pick emblem (pearl pick with a gold ring and music note, charcoal monogram, on a transparent background) plus "The Musiq / ACADEMY" in cream with the two lines the same width. Shared primitives (`Card`, `Button`, `Badge`, `StatCard`, `Input`, etc.) live in `src/components/ui.tsx` — use those and the color tokens for anything new rather than hardcoding colors. (This replaced the earlier teal/coral "Vinyl Label" theme.)
-- **Auth**: NextAuth v5 (credentials + JWT), role stored on the `User` model (`ADMIN` / `TEACHER` / `PARENT`). Route access is enforced in `src/middleware.ts`.
+- **Auth**: NextAuth v5 (credentials + JWT), role stored on the `User` model (`ADMIN` / `TEACHER` / `PARENT` / `FRONT_DESK`). Route access is enforced in `src/middleware.ts`.
 - **New teacher/guardian accounts**: created with a temporary password (`password123` by default) — have them sign in and note it, there's no password reset flow yet.
 - See "Deployment" above for running this in Docker on a VPS/cloud VM.
 - **After resetting the database** (`prisma migrate reset`), sign out and back in. Sessions are JWTs carrying the logged-in user's database ID; a reset regenerates all IDs, so a stale session will fail on the first action that uses your own ID as a foreign key (e.g. logging a lead, granting bonus classes) with a foreign-key-constraint error. Read-only pages keep working, which is why this can look fine right up until you try to submit something.
