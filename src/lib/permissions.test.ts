@@ -3,7 +3,7 @@ import { canAccessAdminPath, isStaffRole } from "./permissions";
 
 describe("canAccessAdminPath", () => {
   it("lets the admin open everything", () => {
-    for (const p of ["/admin", "/admin/reports", "/admin/teachers", "/admin/staff", "/admin/whatsapp/reminders", "/admin/students/export"]) {
+    for (const p of ["/admin", "/admin/reports", "/admin/teachers", "/admin/users", "/admin/whatsapp/reminders", "/admin/students/export"]) {
       expect(canAccessAdminPath("ADMIN", p)).toBe(true);
     }
   });
@@ -35,7 +35,7 @@ describe("canAccessAdminPath", () => {
       "/admin/teachers",
       "/admin/teachers/abc123",
       "/admin/courses",
-      "/admin/staff",
+      "/admin/users",
       "/admin/whatsapp",
       "/admin/whatsapp/new",
       "/admin/whatsapp/reminders",

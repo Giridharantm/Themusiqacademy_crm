@@ -14,7 +14,7 @@ const ADMIN_ONLY: Record<string, string[]> = {
   "batch-actions.ts": ["createBatch", "updateBatch", "deleteBatch"],
   "course-actions.ts": ["createCourse", "deleteCourse"],
   "user-actions.ts": ["createTeacher", "updateTeacher", "updateTeacherStatus", "deleteTeacher", "reassignBatch", "reassignAllBatches"],
-  "staff-actions.ts": ["createFrontDesk", "setFrontDeskStatus", "resetFrontDeskPassword"],
+  "user-admin-actions.ts": ["createFrontDesk", "updateUserDetails", "setUserPassword", "resetLearnerPasswordToPhone", "setUserStatus", "deleteUser"],
   "whatsapp-actions.ts": ["sendNotice", "setPhoneConsent", "setRemindersPausedAction", "toggleReminderSkip", "setStudentRemindersOff"],
 };
 

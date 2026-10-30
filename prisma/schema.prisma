@@ -82,6 +82,9 @@ model User {
   role          Role
   phone         String?
   status        String   @default("ACTIVE") // ACTIVE / INACTIVE — deactivating (not deleting) preserves their history on batches/homework/feedback
+  // Set when the person (or the admin) chooses a new password; empty means it is still
+  // the first one it was created with (a learner login starts as their phone number).
+  passwordChangedAt DateTime?
   createdAt     DateTime @default(now())
 
   // Teacher relations

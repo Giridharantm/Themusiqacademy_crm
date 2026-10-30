@@ -79,9 +79,13 @@ An `INACTIVE` student never shows up in a batch's roster, its student count, or 
 7. **Teachers** log in separately, see only their own batches and students, mark attendance, assign homework, and leave feedback. Manage teacher accounts from `/admin/teachers` — see "Managing teachers" below.
 8. **Learners** (the student, a parent or a guardian — the site calls it the *learner login*) sign in and see the linked student's subscription progress, attendance history, pending/paid invoices, homework and teacher feedback — read only. On the student's page the admin adds these under **Learner logins** (name, email, relation: Mother / Father / Guardian / Student (self)). Internally the role is still named `PARENT` and the screens live under `/parent` — only the wording shown to people changed; renaming the role would need a data migration for no visible benefit.
 
+## Users page (admin)
+
+`/admin/users` lists **everyone who can sign in** — admin, front desk, teachers and the student/parent logins — with search (name, email, phone or a student's name), a filter by kind and paging. Each row shows the **username** (the phone number for a student/parent login, the email for everyone else), the role, whether it is switched on, which students a learner login is for, and whether the **password is still the first one** (`User.passwordChangedAt` empty — a learner's first password is their phone number) or when it was changed. **Passwords are never shown: they are stored scrambled (bcrypt), so they can be replaced but not read back.** Per login the admin can **edit** name/phone/email (a learner's phone is their username, so it is required and can't be another login's number; a learner's email is optional), **set a new password** (8+ characters), **reset a learner to their phone number**, **switch off/on** (blocks sign-in at once, history stays; not your own), and **delete** (not your own, never an admin login; a teacher with batches or history, or anyone with records attached, is refused — switch off instead). Actions are in `src/lib/actions/user-admin-actions.ts`, all `requireRole("ADMIN")`.
+
 ## Front desk logins
 
-A fourth role, `FRONT_DESK`, is for the person at the desk. The admin creates the logins on **Staff** (`/admin/staff`, admin only): name, email, phone and a password of 8+ characters (there is no default password); a login can be deactivated (it stops signing in at once, history stays) and given a new password. Front desk uses the same `/admin` screens with a shorter menu — Dashboard, Leads, Students, Attendance, Batches, Billing, Inbox.
+A fourth role, `FRONT_DESK`, is for the person at the desk. The admin creates the logins on **Users** (`/admin/users`, admin only): name, email, phone and a password of 8+ characters (there is no default password); a login can be deactivated (it stops signing in at once, history stays) and given a new password. Front desk uses the same `/admin` screens with a shorter menu — Dashboard, Leads, Students, Attendance, Batches, Billing, Inbox.
 
 | Area | Front desk can | Front desk cannot |
 |---|---|---|
@@ -91,7 +95,7 @@ A fourth role, `FRONT_DESK`, is for the person at the desk. The admin creates th
 | Batches | view | create, edit, delete |
 | Billing | record payments (including any discount), raise invoices, record a balance on an invoice, view and print; the outstanding-dues figure | cancel or delete an invoice; the revenue figure |
 | WhatsApp inbox | read, reply, mark a number as spam / unblock | — |
-| Not available at all | — | Reports (and every CSV export), revenue and GST, Teachers, Courses, Staff, the WhatsApp overview, class-reminder controls and sending notices |
+| Not available at all | — | Reports (and every CSV export), revenue and GST, Teachers, Courses, Users, the WhatsApp overview, class-reminder controls and sending notices |
 
 It is enforced twice: `canAccessAdminPath()` in `src/lib/permissions.ts` (used by `src/middleware.ts`, so a hidden page's address just returns to the dashboard) and `requireRole("ADMIN", "FRONT_DESK")` on each allowed server action — every other action is `requireRole("ADMIN")`. `src/lib/actions/permissions.test.ts` lists both sets, so widening an admin-only action by accident fails the tests. To open something to front desk, add its path to `FRONT_DESK_AREAS`, change the action's role check, hide admin-only controls with `isAdmin` on the page, and update that test.
 
