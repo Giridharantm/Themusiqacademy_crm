@@ -73,8 +73,8 @@ export async function findStudentOrUserByPhone(phone: string): Promise<boolean> 
   if (tail.length < 8) return false;
   const like = `%${tail}`;
   const [students, users] = await Promise.all([
-    prisma.$queryRaw<{ id: string }[]>`select id from "Student" where regexp_replace(coalesce(phone, ''), '\D', '', 'g') like ${like} limit 1`,
-    prisma.$queryRaw<{ id: string }[]>`select id from "User" where regexp_replace(coalesce(phone, ''), '\D', '', 'g') like ${like} limit 1`,
+    prisma.$queryRaw<{ id: string }[]>`select id from "Student" where regexp_replace(coalesce(phone, ''), '[^0-9]', '', 'g') like ${like} limit 1`,
+    prisma.$queryRaw<{ id: string }[]>`select id from "User" where regexp_replace(coalesce(phone, ''), '[^0-9]', '', 'g') like ${like} limit 1`,
   ]);
   return students.length > 0 || users.length > 0;
 }

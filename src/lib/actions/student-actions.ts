@@ -3,6 +3,10 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/authz";
 import { recordRegistrationConsent } from "@/lib/whatsapp-service";
+import { defaultLoginPassword } from "@/lib/login-password";
+import { findLearnerLoginsByPhone } from "@/lib/learner-logins";
+import { placeholderEmail } from "@/lib/login";
+import { normalizePhone } from "@/lib/whatsapp-notices";
 import { revalidatePath } from "next/cache";
 import { nextStudentCode } from "@/lib/students";
 import { PLAN_CLASSES, PLAN_DAYS, addDays, type SubscriptionPlan } from "@/lib/subscription";
@@ -51,13 +55,23 @@ export async function addGuardian(studentId: string, formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim() || null;
   const relation = String(formData.get("relation") ?? "Parent").trim();
 
-  if (!name || !email) throw new Error("Name and email are required");
+  if (!name) throw new Error("Name is required");
+  const normalizedPhone = normalizePhone(phone);
+  if (!normalizedPhone) throw new Error("A valid phone number is needed — it is the login username and first password");
 
-  let user = await prisma.user.findUnique({ where: { email } });
+  // The phone number is the username, so someone who already has a login (a
+  // sibling's parent, say) is linked to this student rather than given a second
+  // one. An email is optional; staff emails can't be reused as a learner login.
+  let user: { id: string } | null = (await findLearnerLoginsByPhone(normalizedPhone))[0] ?? null;
+  if (!user && email) {
+    const byEmail = await prisma.user.findUnique({ where: { email } });
+    if (byEmail && byEmail.role !== "PARENT") throw new Error("That email belongs to a staff login");
+    user = byEmail;
+  }
   if (!user) {
-    const passwordHash = await bcrypt.hash("password123", 10);
+    const password = defaultLoginPassword(normalizedPhone) as string;
     user = await prisma.user.create({
-      data: { name, email, phone, role: "PARENT", passwordHash },
+      data: { name, email: email || placeholderEmail(normalizedPhone), phone, role: "PARENT", passwordHash: await bcrypt.hash(password, 10) },
     });
   }
 

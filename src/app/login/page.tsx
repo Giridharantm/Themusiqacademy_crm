@@ -19,13 +19,14 @@ export default function LoginPage() {
             <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</div>
           )}
           <label className="block">
-            <span className="block text-sm font-medium text-ink mb-1">Email</span>
+            <span className="block text-sm font-medium text-ink mb-1">Email or phone number</span>
             <input
               name="email"
-              type="email"
+              type="text"
+              autoComplete="username"
               required
               className="w-full rounded-md border border-line bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
-              placeholder="you@example.com"
+              placeholder="you@example.com or 98450 12345"
             />
           </label>
           <label className="block">

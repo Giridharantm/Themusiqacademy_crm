@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { currentUser } from "@/lib/authz";
+import { isPlaceholderEmail } from "@/lib/login";
 import {
   addGuardian,
   removeGuardian,
@@ -578,7 +579,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                   <li key={g.id} className="px-5 py-3 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-slate-900">{g.user.name}</p>
-                      <p className="text-xs text-slate-500">{g.relation} · {g.user.email}</p>
+                      <p className="text-xs text-slate-500">{g.relation} · {isPlaceholderEmail(g.user.email) ? g.user.phone : g.user.email}</p>
                     </div>
                     <form action={removeGuardian.bind(null, student.id, g.userId)}>
                       <Button type="submit" variant="ghost">Remove</Button>
@@ -590,8 +591,8 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             <CardBody className="border-t border-slate-100">
               <form action={addGuardian.bind(null, student.id)} className="space-y-3">
                 <Input label="Name" name="name" required />
-                <Input label="Email (used for login)" name="email" type="email" required />
-                <Input label="Phone" name="phone" />
+                <Input label="Email (optional)" name="email" type="email" />
+                <Input label="Phone (their username and first password)" name="phone" required />
                 <Select label="Relation" name="relation" defaultValue="Mother">
                   <option value="Mother">Mother</option>
                   <option value="Father">Father</option>
@@ -600,7 +601,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                 </Select>
                 <p className="text-xs text-slate-400">
                   For a student who logs in themselves, use &quot;Student (self)&quot; with their own email/phone.
-                  New logins get password &quot;password123&quot; — ask them to sign in and note it down.
+                  They sign in with their phone number as the username and, to begin with, as the password — tell them, and they can change the password under Account settings. A number that already has a login (a sibling&apos;s parent, say) is linked to this student instead of getting a second one.
                 </p>
                 <Button type="submit" variant="secondary" className="w-full">Add login</Button>
               </form>
