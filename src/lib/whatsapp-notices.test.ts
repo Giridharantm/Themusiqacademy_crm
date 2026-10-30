@@ -13,6 +13,7 @@ import {
   normalizePhone,
   waNumber,
   recipientPhones,
+  canAutoConsent,
   templateRequest,
   isStopMessage,
   isStartMessage,
@@ -234,5 +235,20 @@ describe("filterReminderRows", () => {
     expect(names({ q: "+91 98808-31267" })).toEqual(["Ravi Kumar"]); // the country code is ignored
     expect(names({ q: "98808 31267" })).toEqual(["Ravi Kumar"]);
     expect(names({ q: "zzz" })).toEqual([]);
+  });
+});
+
+describe("canAutoConsent", () => {
+  const stop = new Date("2026-10-01T00:00:00Z");
+
+  it("switches on a number that has no record, or only an inbox record", () => {
+    expect(canAutoConsent(null)).toBe(true);
+    expect(canAutoConsent({ optedIn: false, optedOutAt: null, blockedAt: null })).toBe(true);
+  });
+
+  it("leaves alone a number that is on already, said STOP, or was blocked as spam", () => {
+    expect(canAutoConsent({ optedIn: true, optedOutAt: null, blockedAt: null })).toBe(false);
+    expect(canAutoConsent({ optedIn: false, optedOutAt: stop, blockedAt: null })).toBe(false);
+    expect(canAutoConsent({ optedIn: false, optedOutAt: null, blockedAt: stop })).toBe(false);
   });
 });

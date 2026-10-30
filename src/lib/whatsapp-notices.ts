@@ -112,6 +112,15 @@ export function recipientPhones(guardianPhones: (string | null | undefined)[], s
   return Array.from(new Set(chosen));
 }
 
+// Registering a student and adding classes is where the family is told they
+// will get WhatsApp updates, so their number is switched on then — unless it
+// has already said STOP, been blocked as spam, or is on already.
+export function canAutoConsent(existing: { optedIn: boolean; optedOutAt: Date | null; blockedAt: Date | null } | null): boolean {
+  if (!existing) return true;
+  if (existing.optedIn || existing.blockedAt) return false;
+  return !existing.optedOutAt;
+}
+
 export type TemplateRequest = {
   messaging_product: "whatsapp";
   to: string;

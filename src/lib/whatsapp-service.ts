@@ -10,6 +10,7 @@ import {
   NOTICE_TYPES,
   TEMPLATE_NOTICE,
   TEMPLATE_RESCHEDULED,
+  canAutoConsent,
   clockLabel,
   istDateString,
   normalizePhone,
@@ -44,6 +45,24 @@ export async function recordInboundConsent(phone: string) {
   if (existing && !existing.optedIn && existing.optedOutAt) return;
   if (existing?.optedIn) return;
   await setConsent(phone, true, "whatsapp-reply");
+}
+
+// Registering a student with classes is the agreement to class messages (the
+// family is told so when they register), so the number(s) this student's
+// messages go to are switched on as soon as they have an active class. Safe to
+// call again: it never overrides a STOP or a spam block, and does nothing for
+// a student with no active enrolment yet.
+export async function recordRegistrationConsent(studentId: string) {
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    include: { guardians: { include: { user: { select: { phone: true } } } }, enrollments: { where: { status: "ACTIVE" }, select: { id: true }, take: 1 } },
+  });
+  if (!student || student.enrollments.length === 0) return;
+
+  for (const phone of recipientPhones(student.guardians.map((g) => g.user.phone), student.phone)) {
+    const existing = await prisma.whatsAppContact.findUnique({ where: { phone }, select: { optedIn: true, optedOutAt: true, blockedAt: true } });
+    if (canAutoConsent(existing)) await setConsent(phone, true, "registration");
+  }
 }
 
 // Students and guardians whose stored number matches this one. The CRM keeps

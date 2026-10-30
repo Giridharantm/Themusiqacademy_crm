@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/authz";
+import { recordRegistrationConsent } from "@/lib/whatsapp-service";
 import { revalidatePath } from "next/cache";
 import { nextStudentCode } from "@/lib/students";
 import { PLAN_CLASSES, PLAN_DAYS, addDays, type SubscriptionPlan } from "@/lib/subscription";
@@ -65,6 +66,9 @@ export async function addGuardian(studentId: string, formData: FormData) {
     update: { relation },
     create: { studentId, userId: user.id, relation },
   });
+
+  // A parent's number added after the classes were: same agreement applies.
+  await recordRegistrationConsent(studentId);
 
   revalidatePath(`/admin/students/${studentId}`);
 }
@@ -142,6 +146,8 @@ export async function enrollInBatch(studentId: string, formData: FormData) {
       });
     }
   }
+
+  await recordRegistrationConsent(studentId);
 
   revalidatePath(`/admin/students/${studentId}`);
 }

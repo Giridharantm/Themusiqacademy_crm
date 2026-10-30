@@ -611,7 +611,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
 <Card>
             <CardHeader
               title="WhatsApp reminders"
-              subtitle="Class reminders and notices go to the parent or guardian's number (or the student's own, if there is none). A family agrees by messaging 70901 20000 — or tick it here if they agreed in person or on a form."
+              subtitle="Class reminders and notices go to the parent or guardian's number (or the student's own, if there is none). A family is switched on automatically when they are registered with classes (they are told at registration); they can also agree by messaging 70901 20000, and STOP always turns it off."
             />
             <CardBody className="border-b border-slate-100 flex items-center justify-between gap-3">
               <div>
