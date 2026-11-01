@@ -9,7 +9,7 @@ import { join } from "node:path";
 const ADMIN_ONLY: Record<string, string[]> = {
   "lead-actions.ts": ["deleteLead"],
   "student-actions.ts": ["deleteEnrollment"],
-  "subscription-actions.ts": ["createOrRenewSubscription", "setBonusClasses", "updateSubscription", "addPastSubscription", "updateClosedSubscription", "deleteSubscription", "cancelSubscription"],
+  "subscription-actions.ts": ["setBonusClasses", "updateSubscription", "addPastSubscription", "updateClosedSubscription", "deleteSubscription", "cancelSubscription"],
   "billing-actions.ts": ["cancelInvoice", "deleteInvoice"],
   "batch-actions.ts": ["createBatch", "updateBatch", "deleteBatch"],
   "course-actions.ts": ["createCourse", "deleteCourse"],
@@ -21,6 +21,7 @@ const ADMIN_ONLY: Record<string, string[]> = {
 const FRONT_DESK_OK: Record<string, string[]> = {
   "lead-actions.ts": ["createLead", "updateLeadStatus", "updateLead", "addFollowUp", "convertLeadToStudent"],
   "student-actions.ts": ["createStudent", "updateStudentStatus", "addGuardian", "removeGuardian", "enrollInBatch", "updateEnrollmentBatch", "updateEnrollmentStatus", "addStudentFollowUp", "markStudentFollowUpDone"],
+  "subscription-actions.ts": ["createOrRenewSubscription"],
   "attendance-actions.ts": ["markStudentPresentAsAdmin", "unmarkStudentAsAdmin", "markAttendanceOnDateAsAdmin", "removeAttendanceOnDateAsAdmin"],
   "billing-actions.ts": ["recordStudentPayment", "raiseInvoiceFromPayments", "recordPayment"],
   "whatsapp-actions.ts": ["sendInboxReply", "markInboxRead", "markNumberAsSpam", "unblockNumberAction"],

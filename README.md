@@ -90,7 +90,7 @@ A fourth role, `FRONT_DESK`, is for the person at the desk. The admin creates th
 | Area | Front desk can | Front desk cannot |
 |---|---|---|
 | Leads | add, update, log follow-ups, change status, convert to a student | delete a lead |
-| Students | view, add, edit learner logins (guardians), enrol in a batch (a new instrument's package is created at the standard price), mark active/inactive, follow-ups | delete an enrolment; give bonus classes or "classes already used" when enrolling; renew, edit, cancel or delete subscriptions; add past subscriptions; the WhatsApp reminders card; the CSV download |
+| Students | view, add, edit learner logins (guardians), enrol in a batch (a new instrument's package is created at the standard price), renew or start a subscription (standard package, carry-forward allowed), mark active/inactive, follow-ups | delete an enrolment; give bonus classes or "classes already used" when enrolling or renewing; edit, cancel or delete subscriptions; add past subscriptions; the WhatsApp reminders card; the CSV download |
 | Attendance | mark and correct | — |
 | Batches | view | create, edit, delete |
 | Billing | record payments (including any discount), raise invoices, record a balance on an invoice, view and print; the outstanding-dues figure | cancel or delete an invoice; the revenue figure |

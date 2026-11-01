@@ -386,19 +386,17 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                       </div>
 )}
 
-                      {isAdmin && (
-<details className="mb-1" key={activeSubscription?.id ?? `new-${courseId}`}>
+                      <details className="mb-1" key={activeSubscription?.id ?? `new-${courseId}`}>
                         <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none">
                           {activeSubscription ? "Renew / change subscription" : "Add subscription"}
                         </summary>
                         <form action={createOrRenewSubscription.bind(null, student.id, courseId)} className="mt-2 space-y-3 max-w-sm">
-                          <SubscriptionFormFields defaultStartDate={format(new Date(), "yyyy-MM-dd")} currentRemaining={activeRemaining} />
+                          <SubscriptionFormFields defaultStartDate={format(new Date(), "yyyy-MM-dd")} currentRemaining={activeRemaining} allowBonus={isAdmin} />
                           <Button type="submit" className="w-full">
                             {activeSubscription ? "Renew subscription" : "Start subscription"}
                           </Button>
                         </form>
                       </details>
-)}
                     </li>
                   );
                 })}
