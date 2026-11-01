@@ -237,7 +237,6 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                               batches={allAvailableBatches.filter((b) => b.courseId === courseId)}
                               courseIdsWithActiveSubscription={courseIdsWithActiveSubscription}
                               defaultStartDate={format(new Date(), "yyyy-MM-dd")}
-                              allowBonus={isAdmin}
                               lockedCourseId={courseId}
                             />
                           </form>
@@ -391,7 +390,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                           {activeSubscription ? "Renew / change subscription" : "Add subscription"}
                         </summary>
                         <form action={createOrRenewSubscription.bind(null, student.id, courseId)} className="mt-2 space-y-3 max-w-sm">
-                          <SubscriptionFormFields defaultStartDate={format(new Date(), "yyyy-MM-dd")} currentRemaining={activeRemaining} allowBonus={isAdmin} />
+                          <SubscriptionFormFields defaultStartDate={format(new Date(), "yyyy-MM-dd")} currentRemaining={activeRemaining} />
                           <Button type="submit" className="w-full">
                             {activeSubscription ? "Renew subscription" : "Start subscription"}
                           </Button>
@@ -410,7 +409,6 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                     batches={availableBatches}
                     courseIdsWithActiveSubscription={courseIdsWithActiveSubscription}
                     defaultStartDate={format(new Date(), "yyyy-MM-dd")}
-                    allowBonus={isAdmin}
                   />
                 </form>
               </CardBody>

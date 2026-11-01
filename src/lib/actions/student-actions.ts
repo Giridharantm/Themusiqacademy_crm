@@ -143,16 +143,13 @@ export async function enrollInBatch(studentId: string, formData: FormData) {
     const endDateRaw = String(formData.get(`${prefix}endDate`) ?? "");
     const endDate = endDateRaw ? new Date(endDateRaw) : plan === "CUSTOM" ? null : addDays(startDate, PLAN_DAYS[plan]);
 
-    // Bonus classes and classes already used are the admin's call — front desk
-    // enrols at the standard package.
-    const isAdmin = user.role === "ADMIN";
-    const classesUsedAtMigration = isAdmin ? Math.max(0, Number(formData.get(`${prefix}classesUsedAtMigration`) ?? 0)) : 0;
+    const classesUsedAtMigration = Math.max(0, Number(formData.get(`${prefix}classesUsedAtMigration`) ?? 0));
 
     const subscription = await prisma.subscription.create({
       data: { studentId, courseId, plan, baseClasses, startDate, endDate, status: "ACTIVE", classesUsedAtMigration },
     });
 
-    const bonusClasses = isAdmin ? Number(formData.get(`${prefix}bonusClasses`) ?? 0) : 0;
+    const bonusClasses = Number(formData.get(`${prefix}bonusClasses`) ?? 0);
     const bonusReason = String(formData.get(`${prefix}bonusReason`) ?? "").trim() || null;
     if (bonusClasses > 0) {
       await prisma.bonusGrant.create({
