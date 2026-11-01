@@ -75,63 +75,63 @@ enum SubscriptionStatus {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  name          String
-  email         String   @unique
-  passwordHash  String
-  role          Role
-  phone         String?
-  status        String   @default("ACTIVE") // ACTIVE / INACTIVE — deactivating (not deleting) preserves their history on batches/homework/feedback
+  id                String    @id @default(cuid())
+  name              String
+  email             String    @unique
+  passwordHash      String
+  role              Role
+  phone             String?
+  status            String    @default("ACTIVE") // ACTIVE / INACTIVE — deactivating (not deleting) preserves their history on batches/homework/feedback
   // Set when the person (or the admin) chooses a new password; empty means it is still
   // the first one it was created with (a learner login starts as their phone number).
   passwordChangedAt DateTime?
-  createdAt     DateTime @default(now())
+  createdAt         DateTime  @default(now())
 
   // Teacher relations
-  batchesTaught Batch[]      @relation("TeacherBatches")
-  homeworkGiven Homework[]   @relation("TeacherHomework")
-  feedbackGiven Feedback[]   @relation("TeacherFeedback")
+  batchesTaught    Batch[]      @relation("TeacherBatches")
+  homeworkGiven    Homework[]   @relation("TeacherHomework")
+  feedbackGiven    Feedback[]   @relation("TeacherFeedback")
   attendanceMarked Attendance[] @relation("MarkedByTeacher")
 
   // Admin/staff relations
-  leadsAssigned  Lead[]       @relation("AssignedStaff")
-  followUpsMade  FollowUp[]   @relation("FollowUpCreatedBy")
+  leadsAssigned        Lead[]            @relation("AssignedStaff")
+  followUpsMade        FollowUp[]        @relation("FollowUpCreatedBy")
   studentFollowUpsMade StudentFollowUp[] @relation("StudentFollowUpCreatedBy")
-  bonusGrantsGiven BonusGrant[] @relation("BonusGrantedBy")
+  bonusGrantsGiven     BonusGrant[]      @relation("BonusGrantedBy")
 
   // Parent relations
   studentLinks StudentGuardian[]
 }
 
 model Lead {
-  id                String     @id @default(cuid())
-  name              String
-  phone             String
-  email             String?
-  source            LeadSource
-  status            LeadStatus @default(NEW)
+  id                 String     @id @default(cuid())
+  name               String
+  phone              String
+  email              String?
+  source             LeadSource
+  status             LeadStatus @default(NEW)
   interestedCourseId String?
-  interestedCourse  Course?    @relation(fields: [interestedCourseId], references: [id])
-  notes             String?
-  assignedToId      String?
-  assignedTo        User?      @relation("AssignedStaff", fields: [assignedToId], references: [id])
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  interestedCourse   Course?    @relation(fields: [interestedCourseId], references: [id])
+  notes              String?
+  assignedToId       String?
+  assignedTo         User?      @relation("AssignedStaff", fields: [assignedToId], references: [id])
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
   followUps FollowUp[]
   student   Student?
 }
 
 model FollowUp {
-  id              String   @id @default(cuid())
-  leadId          String
-  lead            Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  note            String
-  followUpDate    DateTime
-  done            Boolean  @default(false)
-  createdById     String?
-  createdBy       User?    @relation("FollowUpCreatedBy", fields: [createdById], references: [id])
-  createdAt       DateTime @default(now())
+  id           String   @id @default(cuid())
+  leadId       String
+  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  note         String
+  followUpDate DateTime
+  done         Boolean  @default(false)
+  createdById  String?
+  createdBy    User?    @relation("FollowUpCreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
 }
 
 // A reminder to call an existing student back on a given date — e.g. a
@@ -154,9 +154,16 @@ model Course {
   name            String
   description     String?
   durationMinutes Int      @default(60)
+  // Most students one class of this instrument should hold (null = no limit);
+  // a single batch can override it. Seats are counted per class date.
+  maxStudents     Int?
+  // Whether a missed class may be made up on a different day. Instruments that
+  // run only two days a week can only move to another time on the same day.
+  canMoveDay      Boolean  @default(false)
   createdAt       DateTime @default(now())
 
   batches       Batch[]
+  classChanges  ClassChange[]
   leads         Lead[]
   subscriptions Subscription[]
   attendance    Attendance[]
@@ -170,33 +177,36 @@ model Batch {
   course      Course   @relation(fields: [courseId], references: [id])
   teacherId   String?
   teacher     User?    @relation("TeacherBatches", fields: [teacherId], references: [id])
-  dayOfWeek   String   // e.g. "TUE" — a batch is one instrument + one day + one time slot
-  startTime   String   // "17:00"
-  endTime     String   // "18:00"
+  dayOfWeek   String // e.g. "TUE" — a batch is one instrument + one day + one time slot
+  startTime   String // "17:00"
+  endTime     String // "18:00"
   room        String?
+  maxStudents Int? // overrides the instrument's limit for this one class
   createdAt   DateTime @default(now())
 
   enrollments Enrollment[]
   homework    Homework[]
+  changesFrom ClassChange[] @relation("ChangeFrom")
+  changesTo   ClassChange[] @relation("ChangeTo")
 }
 
 model Student {
-  id         String   @id @default(cuid())
-  studentCode String  @unique // e.g. "STUD-00289" — phone numbers can be shared across a family, this can't
-  name       String
-  dob        DateTime?
-  gender     String?
-  phone      String?
-  email      String?
-  address    String?
-  joinDate   DateTime @default(now())
-  status     String   @default("ACTIVE") // ACTIVE / INACTIVE
+  id           String    @id @default(cuid())
+  studentCode  String    @unique // e.g. "STUD-00289" — phone numbers can be shared across a family, this can't
+  name         String
+  dob          DateTime?
+  gender       String?
+  phone        String?
+  email        String?
+  address      String?
+  joinDate     DateTime  @default(now())
+  status       String    @default("ACTIVE") // ACTIVE / INACTIVE
   // The daily WhatsApp class reminder is skipped for this student when true
   // (notices about a cancelled or moved class still go out).
-  remindersOff Boolean @default(false)
-  leadId     String?  @unique
-  lead       Lead?    @relation(fields: [leadId], references: [id])
-  createdAt  DateTime @default(now())
+  remindersOff Boolean   @default(false)
+  leadId       String?   @unique
+  lead         Lead?     @relation(fields: [leadId], references: [id])
+  createdAt    DateTime  @default(now())
 
   guardians     StudentGuardian[]
   enrollments   Enrollment[]
@@ -207,10 +217,11 @@ model Student {
   payments      Payment[]
   followUps     StudentFollowUp[]
   reminderSkips ReminderSkip[]
+  classChanges  ClassChange[]
 }
 
 model StudentGuardian {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   studentId String
   student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   userId    String
@@ -221,15 +232,15 @@ model StudentGuardian {
 }
 
 model Enrollment {
-  id        String            @id @default(cuid())
+  id        String           @id @default(cuid())
   studentId String
-  student   Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
   batchId   String
-  batch     Batch             @relation(fields: [batchId], references: [id])
-  startDate DateTime          @default(now())
+  batch     Batch            @relation(fields: [batchId], references: [id])
+  startDate DateTime         @default(now())
   endDate   DateTime?
-  status    EnrollmentStatus  @default(ACTIVE)
-  createdAt DateTime          @default(now())
+  status    EnrollmentStatus @default(ACTIVE)
+  createdAt DateTime         @default(now())
 
   @@unique([studentId, batchId])
 }
@@ -242,28 +253,28 @@ model Enrollment {
 // remaining-classes math stay simple without needing to touch past
 // Attendance rows.
 model Subscription {
-  id                 String             @id @default(cuid())
-  studentId          String
-  student            Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  courseId           String
-  course             Course             @relation(fields: [courseId], references: [id])
-  plan               SubscriptionPlan
-  baseClasses        Int
-  carryForwardClasses Int               @default(0)
-  startDate          DateTime           @default(now())
-  endDate            DateTime?
-  status             SubscriptionStatus @default(ACTIVE)
-  classesUsedAtClose Int?
+  id                     String             @id @default(cuid())
+  studentId              String
+  student                Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId               String
+  course                 Course             @relation(fields: [courseId], references: [id])
+  plan                   SubscriptionPlan
+  baseClasses            Int
+  carryForwardClasses    Int                @default(0)
+  startDate              DateTime           @default(now())
+  endDate                DateTime?
+  status                 SubscriptionStatus @default(ACTIVE)
+  classesUsedAtClose     Int?
   // A fixed offset added on top of the live Attendance count for ACTIVE
   // subscriptions — covers classes actually attended before this app existed
   // (the legacy CRM tallied a running total without a per-class Attendance
   // record for all of it), so migrated students don't appear to have fewer
   // classes used than they really do. Stays constant; new Attendance rows
   // marked going forward add on top of it via the live count, not this field.
-  classesUsedAtMigration Int             @default(0)
-  invoiceId          String?            @unique
-  invoice            Invoice?           @relation(fields: [invoiceId], references: [id])
-  createdAt          DateTime           @default(now())
+  classesUsedAtMigration Int                @default(0)
+  invoiceId              String?            @unique
+  invoice                Invoice?           @relation(fields: [invoiceId], references: [id])
+  createdAt              DateTime           @default(now())
 
   bonusGrants BonusGrant[]
 }
@@ -288,64 +299,64 @@ model BonusGrant {
 // different day than their usual batch, and it still counts toward their
 // subscription for that instrument (subscriptions already pool by course).
 model Attendance {
-  id         String            @id @default(cuid())
+  id         String           @id @default(cuid())
   studentId  String
-  student    Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student    Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
   courseId   String
-  course     Course            @relation(fields: [courseId], references: [id])
+  course     Course           @relation(fields: [courseId], references: [id])
   date       DateTime
   status     AttendanceStatus
   note       String?
   markedById String?
-  markedBy   User?             @relation("MarkedByTeacher", fields: [markedById], references: [id])
-  createdAt  DateTime          @default(now())
+  markedBy   User?            @relation("MarkedByTeacher", fields: [markedById], references: [id])
+  createdAt  DateTime         @default(now())
 
   @@unique([studentId, courseId, date])
 }
 
 model Homework {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   batchId      String
-  batch        Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  batch        Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
   teacherId    String?
-  teacher      User?    @relation("TeacherHomework", fields: [teacherId], references: [id])
+  teacher      User?     @relation("TeacherHomework", fields: [teacherId], references: [id])
   title        String
   description  String?
-  assignedDate DateTime @default(now())
+  assignedDate DateTime  @default(now())
   dueDate      DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 }
 
 model Feedback {
-  id         String   @id @default(cuid())
-  studentId  String
-  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  teacherId  String?
-  teacher    User?    @relation("TeacherFeedback", fields: [teacherId], references: [id])
-  note       String
-  date       DateTime @default(now())
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacherId String?
+  teacher   User?    @relation("TeacherFeedback", fields: [teacherId], references: [id])
+  note      String
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model Invoice {
-  id             String        @id @default(cuid())
-  invoiceNumber  String        @unique
-  studentId      String
-  student        Student       @relation(fields: [studentId], references: [id])
-  issueDate      DateTime      @default(now())
-  dueDate        DateTime
-  periodStart    DateTime?
-  periodEnd      DateTime?
-  discount       Float         @default(0)
+  id               String        @id @default(cuid())
+  invoiceNumber    String        @unique
+  studentId        String
+  student          Student       @relation(fields: [studentId], references: [id])
+  issueDate        DateTime      @default(now())
+  dueDate          DateTime
+  periodStart      DateTime?
+  periodEnd        DateTime?
+  discount         Float         @default(0)
   // GST breakdown of `total` (post-discount, GST-inclusive), frozen at
   // creation time — 18% combined, split evenly as CGST + SGST.
-  amountWithoutGst Float       @default(0)
-  cgstAmount     Float         @default(0)
-  sgstAmount     Float         @default(0)
-  total          Float
-  status         InvoiceStatus @default(PENDING)
-  notes          String?
-  createdAt      DateTime      @default(now())
+  amountWithoutGst Float         @default(0)
+  cgstAmount       Float         @default(0)
+  sgstAmount       Float         @default(0)
+  total            Float
+  status           InvoiceStatus @default(PENDING)
+  notes            String?
+  createdAt        DateTime      @default(now())
 
   items        InvoiceItem[]
   payments     Payment[]
@@ -353,9 +364,9 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id          String  @id @default(cuid())
+  id          String            @id @default(cuid())
   invoiceId   String
-  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice     Invoice           @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   description String
   amount      Float
   // Set when the line bills a package paid for through the student's
@@ -398,11 +409,11 @@ model Payment {
 // number only gets reminders/notices once it is opted in — by messaging us
 // first, or by an admin recording consent given in person or on a form.
 model WhatsAppContact {
-  phone      String    @id // 10 digits for Indian numbers, "+<digits>" otherwise (as stored across the CRM)
-  optedIn    Boolean   @default(false)
-  optedInAt  DateTime?
-  optedOutAt DateTime?
-  source     String? // "whatsapp-reply" | "admin"
+  phone         String    @id // 10 digits for Indian numbers, "+<digits>" otherwise (as stored across the CRM)
+  optedIn       Boolean   @default(false)
+  optedInAt     DateTime?
+  optedOutAt    DateTime?
+  source        String? // "whatsapp-reply" | "admin"
   // Inbox: set when this number has ever written to us. A conversation is
   // unread while lastInboundAt is newer than lastReadAt.
   name          String? // their WhatsApp profile name
@@ -411,7 +422,7 @@ model WhatsAppContact {
   // Marked as spam from the inbox: blocked on WhatsApp too, and anything they
   // send is ignored (no lead, no inbox entry), and we never message them.
   blockedAt     DateTime?
-  updatedAt  DateTime  @updatedAt
+  updatedAt     DateTime  @updatedAt
 }
 
 enum NoticeType {
@@ -492,6 +503,44 @@ model ReminderSkip {
   createdAt DateTime @default(now())
 
   @@unique([studentId, date])
+}
+
+enum ClassChangeKind {
+  SKIP // not coming, no new slot booked
+  MOVE // missed class made up in another slot
+}
+
+enum ClassChangeStatus {
+  BOOKED
+  CANCELLED
+}
+
+// One family's request to skip a class or make it up in another slot. The
+// class being missed is (fromBatch, fromDate); a MOVE also names the slot taken
+// instead (toBatch, toDate). Only BOOKED rows count: they take a seat in the
+// new slot and free one in the old, for that date only.
+model ClassChange {
+  id          String            @id @default(cuid())
+  studentId   String
+  student     Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId    String
+  course      Course            @relation(fields: [courseId], references: [id])
+  fromBatchId String
+  fromBatch   Batch             @relation("ChangeFrom", fields: [fromBatchId], references: [id])
+  fromDate    DateTime // date-only
+  toBatchId   String?
+  toBatch     Batch?            @relation("ChangeTo", fields: [toBatchId], references: [id])
+  toDate      DateTime? // date-only
+  kind        ClassChangeKind
+  status      ClassChangeStatus @default(BOOKED)
+  source      String            @default("front-desk") // front-desk | admin | whatsapp
+  note        String?
+  createdById String?
+  createdAt   DateTime          @default(now())
+
+  @@index([studentId])
+  @@index([fromBatchId, fromDate])
+  @@index([toBatchId, toDate])
 }
 
 // One row ("main"): the master switch for the daily 10:00 reminder.
