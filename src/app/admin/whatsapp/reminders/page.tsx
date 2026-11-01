@@ -111,7 +111,7 @@ export default async function RemindersPage({
             </p>
             <p className="text-xs text-slate-500 mt-0.5">
               {buttons
-                ? "Each reminder carries “Can't attend” and “Reschedule”. A tap books the skip, or sends the family a list of free make-up slots to pick from (same day, or within 5 working days for Drums, Keyboard and Guitar)."
+                ? "Each reminder asks “Will you be able to attend?” with “Yes, I'll attend” and “No, can't attend”. A No asks whether to reschedule or cancel the class: Reschedule sends a list of free make-up slots to pick from (same day, or within 5 working days for Drums, Keyboard and Guitar); Cancel records the skip."
                 : "Reminders go without buttons. Turn this on only after Meta has approved the templates class_reminder_buttons and class_reminder_progress_buttons — until then those sends would fail."}
             </p>
           </div>

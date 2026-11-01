@@ -9,10 +9,10 @@ import { normalizeIndianPhone } from "@/lib/trial-request";
 // templates in English; their exact wording is documented in the README.
 export const TEMPLATE_REMINDER = "class_reminder"; // {{1}} student, {{2}} instrument, {{3}} time — for a student with no current subscription
 export const TEMPLATE_REMINDER_PROGRESS = "class_reminder_progress"; // same, plus {{4}} classes completed, {{5}} classes in the current subscription
-// The same two reminders with "Can't attend" / "Reschedule" buttons — used once Meta has approved them and the admin has switched buttons on.
+// The same two reminders ending in "Will you be able to attend?" with "Yes, I'll attend" / "No, can't attend" buttons — used once Meta has approved them and the admin has switched buttons on.
 export const TEMPLATE_REMINDER_BUTTONS = "class_reminder_buttons";
 export const TEMPLATE_REMINDER_PROGRESS_BUTTONS = "class_reminder_progress_buttons";
-export const REMINDER_BUTTON_LABELS = ["Can't attend", "Reschedule"] as const;
+export const REMINDER_BUTTON_LABELS = ["Yes, I'll attend", "No, can't attend"] as const;
 export const TEMPLATE_RESCHEDULED = "class_rescheduled"; // {{1}} student, {{2}} instrument, {{3}} old slot, {{4}} new slot
 export const TEMPLATE_NOTICE = "class_notice"; // {{1}} student, {{2}} instrument, {{3}} date, {{4}} message
 
@@ -169,9 +169,9 @@ export const TEMPLATE_BODIES: Record<string, string> = {
   [TEMPLATE_REMINDER]: "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. See you at the academy!",
   [TEMPLATE_REMINDER_PROGRESS]:
     "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. Classes completed so far: {{4}} of {{5}}. See you at the academy!",
-  [TEMPLATE_REMINDER_BUTTONS]: "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. See you at the academy!",
+  [TEMPLATE_REMINDER_BUTTONS]: "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. Will you be able to attend?",
   [TEMPLATE_REMINDER_PROGRESS_BUTTONS]:
-    "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. Classes completed so far: {{4}} of {{5}}. See you at the academy!",
+    "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. Classes completed so far: {{4}} of {{5}}. Will you be able to attend?",
   [TEMPLATE_RESCHEDULED]:
     "Hello! An update from The Musiq Academy: {{1}}'s {{2}} class on {{3}} has been rescheduled to {{4}}. Please reply here if this time doesn't work.",
   [TEMPLATE_NOTICE]:
@@ -191,7 +191,7 @@ export function reminderMessage(
   r: { studentName: string; courseName: string; startTime: string },
   progress: ClassProgress | null,
   // When set, the template with buttons is used and these are the ids the two
-  // buttons ("Can't attend", "Reschedule") send back.
+  // buttons ("Yes, I'll attend", "No, can't attend") send back.
   buttonPayloads?: string[]
 ): { template: string; params: string[]; buttonPayloads?: string[] } {
   const base = [r.studentName, r.courseName, clockLabel(r.startTime)];

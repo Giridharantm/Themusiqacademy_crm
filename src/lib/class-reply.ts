@@ -5,8 +5,10 @@ import { clockLabel, shortDateLabel } from "@/lib/whatsapp-notices";
 import type { SlotOption } from "@/lib/reschedule";
 
 export type ClassReply =
-  | { kind: "cant"; studentId: string; batchId: string; date: string } // "Can't attend" on the reminder
-  | { kind: "move"; studentId: string; batchId: string; date: string } // "Reschedule" on the reminder
+  | { kind: "yes"; studentId: string; batchId: string; date: string } // "Yes, I'll attend" on the reminder
+  | { kind: "no"; studentId: string; batchId: string; date: string } // "No, can't attend" on the reminder
+  | { kind: "move"; studentId: string; batchId: string; date: string } // "Reschedule", asked after a No
+  | { kind: "cancel"; studentId: string; batchId: string; date: string } // "Cancel class", asked after a No
   | { kind: "slot"; studentId: string; batchId: string; date: string; toBatchId: string; toDate: string } // a row chosen from the list
   | { kind: "nomove"; studentId: string; batchId: string; date: string }; // "No slot now" row
 
@@ -20,7 +22,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export function parseReplyId(id: string): ClassReply | null {
   const [kind, studentId, batchId, date, toBatchId, toDate] = id.split("|");
   if (!studentId || !batchId || !DATE.test(date ?? "")) return null;
-  if (kind === "cant" || kind === "move" || kind === "nomove") return { kind, studentId, batchId, date };
+  if (kind === "yes" || kind === "no" || kind === "move" || kind === "cancel" || kind === "nomove") return { kind, studentId, batchId, date };
   if (kind === "slot" && toBatchId && DATE.test(toDate ?? "")) return { kind, studentId, batchId, date, toBatchId, toDate };
   return null;
 }
@@ -39,6 +41,27 @@ export function slotRows(from: { studentId: string; batchId: string; date: strin
   }));
   rows.push({ id: replyId({ kind: "nomove", ...from }), title: "None of these suit me" });
   return rows;
+}
+
+export type InteractiveButtonsRequest = {
+  messaging_product: "whatsapp";
+  to: string;
+  type: "interactive";
+  interactive: {
+    type: "button";
+    body: { text: string };
+    action: { buttons: { type: "reply"; reply: { id: string; title: string } }[] };
+  };
+};
+
+// Up to 3 tap buttons; titles are capped at 20 characters.
+export function buttonsRequest(to: string, body: string, buttons: { id: string; title: string }[]): InteractiveButtonsRequest {
+  return {
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: { type: "button", body: { text: body.slice(0, 1024) }, action: { buttons: buttons.slice(0, 3).map((b) => ({ type: "reply", reply: { id: b.id, title: b.title.slice(0, 20) } })) } },
+  };
 }
 
 export type InteractiveListRequest = {
@@ -73,6 +96,17 @@ export function slotsBody(studentName: string, courseName: string, missed: { dat
 
 export function confirmedText(studentName: string, courseName: string, slot: { date: Date; startTime: string }) {
   return `Confirmed! ${studentName}'s ${courseName} class is booked for ${shortDateLabel(slot.date)} at ${clockLabel(slot.startTime)}. See you then! - The Musiq Academy`;
+}
+
+export function attendingText(studentName: string, startTime: string) {
+  return `Great, see you at ${clockLabel(startTime)}! Have a lovely class. - The Musiq Academy`;
+}
+
+export const REPLY_BUTTON_RESCHEDULE = "Reschedule";
+export const REPLY_BUTTON_CANCEL = "Cancel the class";
+
+export function whatNextText(studentName: string, courseName: string, startTime: string) {
+  return `Sorry to hear that. What would you like to do about ${studentName}'s ${courseName} class today at ${clockLabel(startTime)}?`;
 }
 
 export function skippedText(studentName: string, courseName: string, missed: { date: Date; startTime: string }) {

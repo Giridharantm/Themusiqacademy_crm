@@ -81,7 +81,7 @@ export async function setRemindersPausedAction(paused: boolean) {
   revalidatePath("/admin/whatsapp/reminders");
 }
 
-// Switches the "Can't attend" / "Reschedule" buttons on the daily reminder on
+// Switches the "Yes, I'll attend" / "No, can't attend" buttons on the daily reminder on
 // or off. Only turn them on once Meta has approved the two button templates.
 export async function setReminderButtonsAction(on: boolean) {
   const user = await requireRole("ADMIN");

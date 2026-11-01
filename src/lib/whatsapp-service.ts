@@ -22,7 +22,7 @@ import {
   type ReminderDecision,
   type NoticeTypeKey,
 } from "@/lib/whatsapp-notices";
-import { sendList, sendTemplate, sendText, setWhatsAppBlock, whatsappConfigured } from "@/lib/whatsapp-send";
+import { sendButtons, sendList, sendTemplate, sendText, setWhatsAppBlock, whatsappConfigured } from "@/lib/whatsapp-send";
 import { replyId, type ListRow } from "@/lib/class-reply";
 import { cleanReplyText, isReplyWindowOpen, isUnread } from "@/lib/whatsapp-inbox";
 import { attendanceForSubscription, countUsedClasses, subscriptionTotals } from "@/lib/subscription";
@@ -316,7 +316,7 @@ export async function planReminders(dateStr: string): Promise<ReminderPlan> {
 // What the reminder's two buttons send back: which student's class, and when.
 export function reminderButtonPayloads(row: { studentId: string; batchId: string }, dateStr: string): string[] {
   const base = { studentId: row.studentId, batchId: row.batchId, date: dateStr };
-  return [replyId({ kind: "cant", ...base }), replyId({ kind: "move", ...base })];
+  return [replyId({ kind: "yes", ...base }), replyId({ kind: "no", ...base })];
 }
 
 export type ReminderRun =
@@ -453,6 +453,25 @@ export async function sendListReply(phone: string, body: string, rows: ListRow[]
     });
   } catch (e) {
     console.warn("[whatsapp] list not sent:", e instanceof Error ? e.message : e);
+  }
+}
+
+// Asks a question answered by tapping up to 3 buttons, inside the 24 hours
+// after the family last wrote to us.
+export async function sendButtonsReply(phone: string, body: string, buttons: { id: string; title: string }[], key: string) {
+  try {
+    const row = await prisma.whatsAppMessage.create({
+      data: { kind: "REPLY", phone, template: "interactive", body, summary: body.slice(0, 80), dedupeKey: `reply:${key}` },
+    });
+    const result = await sendButtons(phone, body, buttons);
+    await prisma.whatsAppMessage.update({
+      where: { id: row.id },
+      data: result.ok
+        ? { status: result.dryRun ? "DRY_RUN" : "SENT", waMessageId: result.id, sentAt: new Date() }
+        : { status: "FAILED", error: result.error },
+    });
+  } catch (e) {
+    console.warn("[whatsapp] buttons not sent:", e instanceof Error ? e.message : e);
   }
 }
 

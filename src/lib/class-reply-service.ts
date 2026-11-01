@@ -4,9 +4,23 @@
 import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/attendance";
 import { bookClassChange, slotOptionsFor } from "@/lib/class-changes";
-import { ACADEMY_PHONE_LABEL, callUsText, confirmedText, parseReplyId, skippedText, slotRows, slotsBody } from "@/lib/class-reply";
-import { recipientPhones } from "@/lib/whatsapp-notices";
-import { sendListReply, sendReply } from "@/lib/whatsapp-service";
+import {
+  ACADEMY_PHONE_LABEL,
+  REPLY_BUTTON_CANCEL,
+  REPLY_BUTTON_RESCHEDULE,
+  attendingText,
+  callUsText,
+  confirmedText,
+  parseReplyId,
+  replyId,
+  skippedText,
+  slotRows,
+  slotsBody,
+  whatNextText,
+} from "@/lib/class-reply";
+import { makeUpDeadline } from "@/lib/reschedule";
+import { recipientPhones, shortDateLabel } from "@/lib/whatsapp-notices";
+import { sendButtonsReply, sendListReply, sendReply } from "@/lib/whatsapp-service";
 
 // Returns true when the tap was ours to handle (so the webhook stops there).
 export async function handleClassReply(phone: string, msgId: string, id: string): Promise<boolean> {
@@ -35,21 +49,41 @@ export async function handleClassReply(phone: string, msgId: string, id: string)
   const book = (to: { batchId: string; date: string } | null) =>
     bookClassChange({ studentId: student.id, fromBatchId: batch.id, fromDate: reply.date, to, source: "whatsapp", note: "Booked by the family on WhatsApp" });
 
-  switch (reply.kind) {
-    case "cant": {
-      const r = await book(null);
-      if (!r.ok) {
-        await say(`Sorry, we couldn't record that automatically. Please call us on ${ACADEMY_PHONE_LABEL}.`, 1);
-        return true;
-      }
-      await offerSlots(`${skippedText(student.name, course, missed)} You can make this class up for free.`);
-      return true;
+  // Records the class as skipped and says what is still owed.
+  const skip = async () => {
+    const r = await book(null);
+    if (!r.ok) {
+      await say(`Sorry, we couldn't record that automatically. Please call us on ${ACADEMY_PHONE_LABEL}.`, 1);
+      return;
     }
+    const until = makeUpDeadline(batch.course.canMoveDay, missed.date);
+    const owed = batch.course.canMoveDay
+      ? ` You can still make this class up for free until ${shortDateLabel(until)}. Message us here or call ${ACADEMY_PHONE_LABEL} to pick a slot.`
+      : "";
+    await say(`${skippedText(student.name, course, missed)}${owed}`, 1);
+  };
+
+  switch (reply.kind) {
+    case "yes":
+      await say(attendingText(student.name, batch.startTime), 1);
+      return true;
+    case "no":
+      await sendButtonsReply(
+        phone,
+        whatNextText(student.name, course, batch.startTime),
+        [
+          { id: replyId({ kind: "move", studentId: student.id, batchId: batch.id, date: reply.date }), title: REPLY_BUTTON_RESCHEDULE },
+          { id: replyId({ kind: "cancel", studentId: student.id, batchId: batch.id, date: reply.date }), title: REPLY_BUTTON_CANCEL },
+        ],
+        `${msgId}:1`
+      );
+      return true;
     case "move":
       await offerSlots(null);
       return true;
+    case "cancel":
     case "nomove":
-      await say(`No problem. If you'd like a make-up class later, reply here or call us on ${ACADEMY_PHONE_LABEL}.`, 1);
+      await skip();
       return true;
     case "slot": {
       const r = await book({ batchId: reply.toBatchId, date: reply.toDate });

@@ -107,8 +107,8 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    // A tap on a reminder's "Can't attend" / "Reschedule" button, or on a row of
-    // the slot list we sent back: book it and answer. Only that student's own
+    // A tap on a reminder's "Yes" / "No" button, on the follow-up Reschedule /
+    // Cancel buttons, or on a row of the slot list we sent back: book it and answer. Only that student's own
     // numbers are accepted; anything else falls through as a normal message.
     if (msg.replyId && (await handleClassReply(phone, msg.id, msg.replyId))) {
       await recordInboundConsent(phone);

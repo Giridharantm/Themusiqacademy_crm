@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { listRequest, parseReplyId, replyId, slotRows, MAX_SLOT_ROWS } from "./class-reply";
+import { buttonsRequest, listRequest, parseReplyId, replyId, slotRows, whatNextText, MAX_SLOT_ROWS, REPLY_BUTTON_CANCEL, REPLY_BUTTON_RESCHEDULE } from "./class-reply";
 import { parseInboundMessages } from "./whatsapp";
 import { REMINDER_BUTTON_LABELS, TEMPLATE_BODIES, TEMPLATE_REMINDER_BUTTONS, TEMPLATE_REMINDER_PROGRESS_BUTTONS, reminderMessage, templateRequest } from "./whatsapp-notices";
 import type { SlotOption } from "./reschedule";
@@ -9,8 +9,10 @@ const ids = { studentId: "cstudent000000000000000001", batchId: "cbatch000000000
 describe("reply ids", () => {
   it("round-trips every kind", () => {
     for (const r of [
-      { kind: "cant" as const, ...ids },
+      { kind: "yes" as const, ...ids },
+      { kind: "no" as const, ...ids },
       { kind: "move" as const, ...ids },
+      { kind: "cancel" as const, ...ids },
       { kind: "nomove" as const, ...ids },
       { kind: "slot" as const, ...ids, toBatchId: "cbatch0000000000000000002", toDate: "2026-11-04" },
     ]) {
@@ -19,13 +21,13 @@ describe("reply ids", () => {
   });
 
   it("stays within WhatsApp's id limits (128 for buttons, 200 for rows)", () => {
-    expect(replyId({ kind: "cant", ...ids }).length).toBeLessThanOrEqual(128);
+    expect(replyId({ kind: "no", ...ids }).length).toBeLessThanOrEqual(128);
     expect(replyId({ kind: "slot", ...ids, toBatchId: "cbatch0000000000000000002", toDate: "2026-11-04" }).length).toBeLessThanOrEqual(200);
   });
 
   it("rejects anything that isn't ours", () => {
     expect(parseReplyId("hello")).toBeNull();
-    expect(parseReplyId("cant|s|b|not-a-date")).toBeNull();
+    expect(parseReplyId("no|s|b|not-a-date")).toBeNull();
     expect(parseReplyId("slot|s|b|2026-11-03")).toBeNull(); // no target slot
     expect(parseReplyId("delete|s|b|2026-11-03")).toBeNull();
   });
@@ -64,6 +66,21 @@ describe("slot list", () => {
   });
 });
 
+describe("asking what to do after a No", () => {
+  it("offers Reschedule and Cancel as two tap buttons within WhatsApp's 20-character limit", () => {
+    expect(REPLY_BUTTON_RESCHEDULE.length).toBeLessThanOrEqual(20);
+    expect(REPLY_BUTTON_CANCEL.length).toBeLessThanOrEqual(20);
+    const req = buttonsRequest("919845708094", whatNextText("Asha", "Guitar", "17:00"), [
+      { id: replyId({ kind: "move", ...ids }), title: REPLY_BUTTON_RESCHEDULE },
+      { id: replyId({ kind: "cancel", ...ids }), title: REPLY_BUTTON_CANCEL },
+    ]);
+    expect(req.interactive.type).toBe("button");
+    expect(req.interactive.action.buttons).toHaveLength(2);
+    expect(req.interactive.action.buttons.map((b) => parseReplyId(b.reply.id)?.kind)).toEqual(["move", "cancel"]);
+    expect(req.interactive.body.text).toBe("Sorry to hear that. What would you like to do about Asha's Guitar class today at 5:00 PM?");
+  });
+});
+
 describe("reminder with buttons", () => {
   const r = { studentName: "Asha", courseName: "Guitar", startTime: "17:00" };
 
@@ -84,9 +101,11 @@ describe("reminder with buttons", () => {
     ]);
   });
 
-  it("has the same wording as the plain reminders and short button labels", () => {
-    expect(TEMPLATE_BODIES[TEMPLATE_REMINDER_BUTTONS]).toBe(TEMPLATE_BODIES["class_reminder"]);
-    expect(TEMPLATE_BODIES[TEMPLATE_REMINDER_PROGRESS_BUTTONS]).toBe(TEMPLATE_BODIES["class_reminder_progress"]);
+  it("asks whether they will attend, keeps the plain reminders' parameters, and has short button labels", () => {
+    expect(TEMPLATE_BODIES[TEMPLATE_REMINDER_BUTTONS].endsWith("Will you be able to attend?")).toBe(true);
+    expect(TEMPLATE_BODIES[TEMPLATE_REMINDER_BUTTONS].match(/\{\{\d+\}\}/g)).toHaveLength(3);
+    expect(TEMPLATE_BODIES[TEMPLATE_REMINDER_PROGRESS_BUTTONS].match(/\{\{\d+\}\}/g)).toHaveLength(5);
+    expect(REMINDER_BUTTON_LABELS).toEqual(["Yes, I'll attend", "No, can't attend"]);
     for (const label of REMINDER_BUTTON_LABELS) expect(label.length).toBeLessThanOrEqual(25);
   });
 });
@@ -98,9 +117,14 @@ describe("tapped replies in the webhook", () => {
   });
 
   it("reads a template button's payload", () => {
-    const [m] = parseInboundMessages(wrap({ type: "button", button: { text: "Reschedule", payload: "move|s|b|2026-11-03" } }));
-    expect(m.replyId).toBe("move|s|b|2026-11-03");
+    const [m] = parseInboundMessages(wrap({ type: "button", button: { text: "Reschedule", payload: "no|s|b|2026-11-03" } }));
+    expect(m.replyId).toBe("no|s|b|2026-11-03");
     expect(m.text).toBe("Reschedule");
+  });
+
+  it("reads a reply button's id", () => {
+    const [m] = parseInboundMessages(wrap({ type: "interactive", interactive: { type: "button_reply", button_reply: { id: "cancel|s|b|2026-11-03", title: "Cancel the class" } } }));
+    expect(m.replyId).toBe("cancel|s|b|2026-11-03");
   });
 
   it("reads a list row's id", () => {
