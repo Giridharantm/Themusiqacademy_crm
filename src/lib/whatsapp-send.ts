@@ -3,6 +3,7 @@
 // the server's env. With WHATSAPP_DRY_RUN=1 nothing is sent and every call
 // "succeeds", for trying the flow locally.
 import { templateRequest, waNumber } from "@/lib/whatsapp-notices";
+import { listRequest, type ListRow } from "@/lib/class-reply";
 
 export type SendResult = { ok: true; id: string | null; dryRun?: boolean } | { ok: false; error: string };
 
@@ -62,8 +63,14 @@ export async function setWhatsAppBlock(phone: string, blocked: boolean): Promise
 
 // A pre-approved template message — the only kind we can start a conversation
 // with (outside the 24 hours after a customer writes to us).
-export function sendTemplate(phone: string, template: string, params: string[]): Promise<SendResult> {
-  return post(templateRequest(phone, template, params));
+export function sendTemplate(phone: string, template: string, params: string[], buttonPayloads: string[] = []): Promise<SendResult> {
+  return post(templateRequest(phone, template, params, buttonPayloads));
+}
+
+// A tap-to-choose list (up to 10 rows), only allowed within 24 hours of the
+// customer's last message — sent after they tap a reminder button.
+export function sendList(phone: string, body: string, rows: ListRow[]): Promise<SendResult> {
+  return post(listRequest(waNumber(phone), body, rows));
 }
 
 // Free-form text, only allowed within 24 hours of the customer's last

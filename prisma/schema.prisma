@@ -547,6 +547,9 @@ model ClassChange {
 model WhatsAppSettings {
   id              String   @id @default("main")
   remindersPaused Boolean  @default(false)
+  // Send the reminder with "Can't attend" / "Reschedule" buttons. Off until
+  // Meta has approved the two button templates.
+  buttonReminders Boolean  @default(false)
   changedAt       DateTime @default(now())
   changedBy       String? // name of the admin who last paused or resumed
 }

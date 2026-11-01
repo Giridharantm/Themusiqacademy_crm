@@ -21,6 +21,7 @@ export type InboundMessage = {
   text: string;
   type: string; // text | image | audio | unsupported | …
   at: Date | null; // when WhatsApp says it was sent
+  replyId: string | null; // the id carried by a tapped reminder button or list row
 };
 
 const asRecord = (v: unknown): Record<string, unknown> | null =>
@@ -38,6 +39,19 @@ function messageText(m: Record<string, unknown>): string {
     return String(reply?.title ?? "").trim() || "[interactive reply]";
   }
   return `[${type} message]`;
+}
+
+// The id a tapped button (on a template) or list row carries — what we put
+// there when we sent it.
+function replyIdOf(m: Record<string, unknown>): string | null {
+  const type = typeof m.type === "string" ? m.type : "";
+  if (type === "button") return typeof asRecord(m.button)?.payload === "string" ? (asRecord(m.button)!.payload as string) : null;
+  if (type === "interactive") {
+    const i = asRecord(m.interactive);
+    const reply = asRecord(i?.button_reply) ?? asRecord(i?.list_reply);
+    return typeof reply?.id === "string" ? reply.id : null;
+  }
+  return null;
 }
 
 // Pulls the customer messages out of a webhook payload. Delivery/read status
@@ -79,6 +93,7 @@ export function parseInboundMessages(payload: unknown): InboundMessage[] {
           text: messageText(m).slice(0, 1000),
           type: typeof m.type === "string" ? m.type : "unknown",
           at: Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000) : null,
+          replyId: replyIdOf(m),
         });
       }
     }

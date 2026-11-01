@@ -22,7 +22,8 @@ import {
   type ReminderDecision,
   type NoticeTypeKey,
 } from "@/lib/whatsapp-notices";
-import { sendTemplate, sendText, setWhatsAppBlock, whatsappConfigured } from "@/lib/whatsapp-send";
+import { sendList, sendTemplate, sendText, setWhatsAppBlock, whatsappConfigured } from "@/lib/whatsapp-send";
+import { replyId, type ListRow } from "@/lib/class-reply";
 import { cleanReplyText, isReplyWindowOpen, isUnread } from "@/lib/whatsapp-inbox";
 import { attendanceForSubscription, countUsedClasses, subscriptionTotals } from "@/lib/subscription";
 
@@ -168,6 +169,7 @@ async function sendLogged(args: {
   noticeId?: string;
   template: string;
   params: string[];
+  buttonPayloads?: string[];
   summary: string;
   dedupeKey: string;
 }): Promise<Outcome> {
@@ -191,7 +193,7 @@ async function sendLogged(args: {
     rowId = existing.id;
   }
 
-  const result = await sendTemplate(args.phone, args.template, args.params);
+  const result = await sendTemplate(args.phone, args.template, args.params, args.buttonPayloads);
   await prisma.whatsAppMessage.update({
     where: { id: rowId },
     data: result.ok
@@ -218,6 +220,18 @@ export async function setRemindersPaused(paused: boolean, changedBy: string) {
     where: { id: "main" },
     create: { id: "main", remindersPaused: paused, changedBy },
     update: { remindersPaused: paused, changedAt: new Date(), changedBy },
+  });
+}
+
+export async function getReminderButtons(): Promise<boolean> {
+  return (await prisma.whatsAppSettings.findUnique({ where: { id: "main" } }))?.buttonReminders ?? false;
+}
+
+export async function setReminderButtons(on: boolean, changedBy: string) {
+  await prisma.whatsAppSettings.upsert({
+    where: { id: "main" },
+    create: { id: "main", buttonReminders: on, changedBy },
+    update: { buttonReminders: on },
   });
 }
 
@@ -299,6 +313,12 @@ export async function planReminders(dateStr: string): Promise<ReminderPlan> {
   return { dateStr, isClassDay: true, rows, classes: batches.length, noticeBatches: noticeBatches.size };
 }
 
+// What the reminder's two buttons send back: which student's class, and when.
+export function reminderButtonPayloads(row: { studentId: string; batchId: string }, dateStr: string): string[] {
+  const base = { studentId: row.studentId, batchId: row.batchId, date: dateStr };
+  return [replyId({ kind: "cant", ...base }), replyId({ kind: "move", ...base })];
+}
+
 export type ReminderRun =
   | { ran: false; reason: string }
   | ({ ran: true; date: string; classes: number; excluded: number } & Tally);
@@ -314,6 +334,7 @@ export async function runClassReminders(now = new Date()): Promise<ReminderRun> 
   const plan = await planReminders(dateStr);
   if (!plan.isClassDay) return { ran: false, reason: "No classes today (Monday holiday)" };
 
+  const buttons = await getReminderButtons();
   const tally = emptyTally();
   let excluded = 0;
   for (const row of plan.rows) {
@@ -324,7 +345,7 @@ export async function runClassReminders(now = new Date()): Promise<ReminderRun> 
       kind: "REMINDER",
       phone: row.phone,
       studentId: row.studentId,
-      ...reminderMessage(row, row.progress),
+      ...reminderMessage(row, row.progress, buttons ? reminderButtonPayloads(row, dateStr) : undefined),
       summary: `${row.courseName} ${clockLabel(row.startTime)} · ${row.studentName}`,
       dedupeKey: row.key,
     });
@@ -415,6 +436,58 @@ export async function sendReply(phone: string, text: string, key: string) {
     // must never break handling of the webhook.
     console.warn("[whatsapp] reply not sent:", e instanceof Error ? e.message : e);
   }
+}
+
+// A tap-to-choose list inside the 24 hours after the family tapped a button.
+export async function sendListReply(phone: string, body: string, rows: ListRow[], key: string) {
+  try {
+    const row = await prisma.whatsAppMessage.create({
+      data: { kind: "REPLY", phone, template: "interactive", body, summary: `Slot list (${rows.length - 1} options)`, dedupeKey: `reply:${key}` },
+    });
+    const result = await sendList(phone, body, rows);
+    await prisma.whatsAppMessage.update({
+      where: { id: row.id },
+      data: result.ok
+        ? { status: result.dryRun ? "DRY_RUN" : "SENT", waMessageId: result.id, sentAt: new Date() }
+        : { status: "FAILED", error: result.error },
+    });
+  } catch (e) {
+    console.warn("[whatsapp] list not sent:", e instanceof Error ? e.message : e);
+  }
+}
+
+// Tells the family about a make-up class staff booked for them, with the
+// approved "class rescheduled" message, to each number that has agreed to
+// WhatsApp. Returns how many went out (0 when nobody has agreed or it isn't a
+// make-up).
+export async function notifyClassChange(changeId: string): Promise<number> {
+  const change = await prisma.classChange.findUnique({
+    where: { id: changeId },
+    include: { student: { include: { guardians: { include: { user: { select: { phone: true } } } } } }, course: true, fromBatch: true, toBatch: true },
+  });
+  if (!change || change.status !== "BOOKED" || change.kind !== "MOVE" || !change.toBatch || !change.toDate || !whatsappConfigured()) return 0;
+
+  const phones = recipientPhones(change.student.guardians.map((g) => g.user.phone), change.student.phone);
+  const agreed = new Set((await prisma.whatsAppContact.findMany({ where: { phone: { in: phones }, optedIn: true, blockedAt: null }, select: { phone: true } })).map((c) => c.phone));
+  let sent = 0;
+  for (const phone of phones.filter((p) => agreed.has(p))) {
+    const outcome = await sendLogged({
+      kind: "NOTICE",
+      phone,
+      studentId: change.studentId,
+      template: TEMPLATE_RESCHEDULED,
+      params: [
+        change.student.name,
+        change.course.name,
+        `${shortDateLabel(change.fromDate)} ${clockLabel(change.fromBatch.startTime)}`,
+        `${shortDateLabel(change.toDate)} ${clockLabel(change.toBatch.startTime)}`,
+      ],
+      summary: `Make-up ${change.course.name} ${shortDateLabel(change.toDate)} ${clockLabel(change.toBatch.startTime)} · ${change.student.name}`,
+      dedupeKey: `change:${change.id}:${phone}`,
+    });
+    if (outcome === "sent") sent++;
+  }
+  return sent;
 }
 
 // ---- inbox ----------------------------------------------------------------

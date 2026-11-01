@@ -15,7 +15,7 @@ const ADMIN_ONLY: Record<string, string[]> = {
   "course-actions.ts": ["createCourse", "updateCourseRules", "deleteCourse"],
   "user-actions.ts": ["createTeacher", "updateTeacher", "updateTeacherStatus", "deleteTeacher", "reassignBatch", "reassignAllBatches"],
   "user-admin-actions.ts": ["createFrontDesk", "updateUserDetails", "setUserPassword", "resetLearnerPasswordToPhone", "setUserStatus", "deleteUser"],
-  "whatsapp-actions.ts": ["sendNotice", "setPhoneConsent", "setRemindersPausedAction", "toggleReminderSkip", "setStudentRemindersOff"],
+  "whatsapp-actions.ts": ["sendNotice", "setPhoneConsent", "setRemindersPausedAction", "setReminderButtonsAction","toggleReminderSkip", "setStudentRemindersOff"],
 };
 
 const FRONT_DESK_OK: Record<string, string[]> = {

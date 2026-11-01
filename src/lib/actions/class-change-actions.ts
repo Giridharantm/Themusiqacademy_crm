@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/authz";
 import { bookClassChange as book, cancelClassChange as cancel } from "@/lib/class-changes";
+import { notifyClassChange } from "@/lib/whatsapp-service";
 
 // Books a skipped class (no `toSlot`) or a make-up class. `toSlot` is
 // "<batchId>|<yyyy-mm-dd>", chosen from the options the page offered; the same
@@ -29,7 +30,10 @@ export async function bookClassChange(studentId: string, fromBatchId: string, fr
   revalidatePath("/admin/attendance");
   revalidatePath("/admin/whatsapp/reminders");
   if (!result.ok) redirect(`/admin/changes?studentId=${studentId}&batchId=${fromBatchId}&date=${fromDate}&error=${encodeURIComponent(result.error)}`);
-  redirect(`/admin/changes?on=${fromDate}&saved=1`);
+  // A make-up can be sent to the family right away with the approved "class
+  // rescheduled" message (only to numbers that have agreed to WhatsApp).
+  const messaged = formData.get("notify") === "on" && toBatchId ? await notifyClassChange(result.changeId) : 0;
+  redirect(`/admin/changes?on=${fromDate}&saved=1${messaged > 0 ? "&messaged=1" : ""}`);
 }
 
 export async function cancelClassChange(changeId: string, backDate: string) {

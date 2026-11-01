@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/authz";
 import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/attendance";
-import { blockNumber, createAndSendNotice, markConversationRead, sendConversationReply, setConsent, setRemindersPaused, unblockNumber } from "@/lib/whatsapp-service";
+import { blockNumber, createAndSendNotice, markConversationRead, sendConversationReply, setConsent, setReminderButtons, setRemindersPaused, unblockNumber } from "@/lib/whatsapp-service";
 import { isNoticeType, normalizePhone } from "@/lib/whatsapp-notices";
 
 // Sends an ad hoc notice to the opted-in families of the chosen classes. The
@@ -78,6 +78,14 @@ export async function setRemindersPausedAction(paused: boolean) {
   const user = await requireRole("ADMIN");
   await setRemindersPaused(paused, user.name ?? "an admin");
   revalidatePath("/admin/whatsapp");
+  revalidatePath("/admin/whatsapp/reminders");
+}
+
+// Switches the "Can't attend" / "Reschedule" buttons on the daily reminder on
+// or off. Only turn them on once Meta has approved the two button templates.
+export async function setReminderButtonsAction(on: boolean) {
+  const user = await requireRole("ADMIN");
+  await setReminderButtons(on, user.name ?? "an admin");
   revalidatePath("/admin/whatsapp/reminders");
 }
 

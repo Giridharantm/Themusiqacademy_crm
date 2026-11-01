@@ -12,6 +12,7 @@ import {
   parseStatusUpdates,
 } from "@/lib/whatsapp";
 import { isStartMessage, isStopMessage } from "@/lib/whatsapp-notices";
+import { handleClassReply } from "@/lib/class-reply-service";
 import { findStudentOrUserByPhone, isBlocked, recordInbound, recordInboundConsent, sendReply, setConsent } from "@/lib/whatsapp-service";
 
 // Receiver for Meta's WhatsApp Cloud API webhook. Meta calls GET once to
@@ -103,6 +104,15 @@ export async function POST(request: NextRequest) {
     if (isStartMessage(msg.text)) {
       await setConsent(phone, true, "whatsapp-reply");
       await sendReply(phone, "Thank you! You will get class reminders and updates from The Musiq Academy on WhatsApp. Send STOP any time to turn them off.", msg.id);
+      continue;
+    }
+
+    // A tap on a reminder's "Can't attend" / "Reschedule" button, or on a row of
+    // the slot list we sent back: book it and answer. Only that student's own
+    // numbers are accepted; anything else falls through as a normal message.
+    if (msg.replyId && (await handleClassReply(phone, msg.id, msg.replyId))) {
+      await recordInboundConsent(phone);
+      revalidatePath("/admin/changes");
       continue;
     }
 

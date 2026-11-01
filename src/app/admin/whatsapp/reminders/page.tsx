@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { parseDateOnly } from "@/lib/attendance";
-import { setRemindersPausedAction, setStudentRemindersOff, toggleReminderSkip } from "@/lib/actions/whatsapp-actions";
-import { getRemindersPaused, planReminders } from "@/lib/whatsapp-service";
+import { setReminderButtonsAction, setRemindersPausedAction, setStudentRemindersOff, toggleReminderSkip } from "@/lib/actions/whatsapp-actions";
+import { getReminderButtons, getRemindersPaused, planReminders } from "@/lib/whatsapp-service";
 import {
   DECISION_LABELS,
   TEMPLATE_BODIES,
@@ -42,7 +42,7 @@ export default async function RemindersPage({
   const date = parseDateOnly(dateStr);
   const isPast = dateStr < today;
 
-  const [plan, pause] = await Promise.all([planReminders(dateStr), getRemindersPaused()]);
+  const [plan, pause, buttons] = await Promise.all([planReminders(dateStr), getRemindersPaused(), getReminderButtons()]);
 
   // Filters narrow the list below; the badges above still describe the whole day.
   const rows = filterReminderRows(plan.rows, { course: sp.course, time: sp.time, status: sp.status, q: sp.q });
@@ -97,6 +97,30 @@ export default async function RemindersPage({
               confirmMessage={pause.paused ? "Resume the daily 10:00 AM reminders?" : "Pause ALL daily reminders? Nothing will be sent at 10:00 AM until you resume."}
             >
               {pause.paused ? "Resume reminders" : "Pause reminders"}
+            </ConfirmSubmitButton>
+          </form>
+        </CardBody>
+      </Card>
+
+      <Card className="mb-6">
+        <CardBody className="flex flex-wrap items-center justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="text-sm font-medium text-slate-900">
+              Reminder buttons are{" "}
+              <span className={buttons ? "text-emerald-700" : "text-slate-500"}>{buttons ? "ON" : "OFF"}</span>
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {buttons
+                ? "Each reminder carries “Can't attend” and “Reschedule”. A tap books the skip, or sends the family a list of free make-up slots to pick from (same day, or within 5 working days for Drums, Keyboard and Guitar)."
+                : "Reminders go without buttons. Turn this on only after Meta has approved the templates class_reminder_buttons and class_reminder_progress_buttons — until then those sends would fail."}
+            </p>
+          </div>
+          <form action={setReminderButtonsAction.bind(null, !buttons)}>
+            <ConfirmSubmitButton
+              variant="secondary"
+              confirmMessage={buttons ? "Send reminders without buttons again?" : "Turn buttons on? Both button templates must already be approved in WhatsApp Manager, or reminders will fail to send."}
+            >
+              {buttons ? "Turn buttons off" : "Turn buttons on"}
             </ConfirmSubmitButton>
           </form>
         </CardBody>

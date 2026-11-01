@@ -9,6 +9,10 @@ import { normalizeIndianPhone } from "@/lib/trial-request";
 // templates in English; their exact wording is documented in the README.
 export const TEMPLATE_REMINDER = "class_reminder"; // {{1}} student, {{2}} instrument, {{3}} time — for a student with no current subscription
 export const TEMPLATE_REMINDER_PROGRESS = "class_reminder_progress"; // same, plus {{4}} classes completed, {{5}} classes in the current subscription
+// The same two reminders with "Can't attend" / "Reschedule" buttons — used once Meta has approved them and the admin has switched buttons on.
+export const TEMPLATE_REMINDER_BUTTONS = "class_reminder_buttons";
+export const TEMPLATE_REMINDER_PROGRESS_BUTTONS = "class_reminder_progress_buttons";
+export const REMINDER_BUTTON_LABELS = ["Can't attend", "Reschedule"] as const;
 export const TEMPLATE_RESCHEDULED = "class_rescheduled"; // {{1}} student, {{2}} instrument, {{3}} old slot, {{4}} new slot
 export const TEMPLATE_NOTICE = "class_notice"; // {{1}} student, {{2}} instrument, {{3}} date, {{4}} message
 
@@ -128,11 +132,16 @@ export type TemplateRequest = {
   template: {
     name: string;
     language: { code: string };
-    components: { type: "body"; parameters: { type: "text"; text: string }[] }[];
+    components: (
+      | { type: "body"; parameters: { type: "text"; text: string }[] }
+      | { type: "button"; sub_type: "quick_reply"; index: string; parameters: { type: "payload"; payload: string }[] }
+    )[];
   };
 };
 
-export function templateRequest(phone: string, name: string, params: string[]): TemplateRequest {
+// `buttonPayloads` fills a template's quick-reply buttons, in order; what the
+// family taps comes back to us carrying that payload.
+export function templateRequest(phone: string, name: string, params: string[], buttonPayloads: string[] = []): TemplateRequest {
   return {
     messaging_product: "whatsapp",
     to: waNumber(phone),
@@ -140,7 +149,10 @@ export function templateRequest(phone: string, name: string, params: string[]): 
     template: {
       name,
       language: { code: "en" },
-      components: [{ type: "body", parameters: params.map((text) => ({ type: "text", text: sanitizeParam(text) })) }],
+      components: [
+        { type: "body", parameters: params.map((text) => ({ type: "text", text: sanitizeParam(text) })) },
+        ...buttonPayloads.map((payload, i) => ({ type: "button" as const, sub_type: "quick_reply" as const, index: String(i), parameters: [{ type: "payload" as const, payload }] })),
+      ],
     },
   };
 }
@@ -156,6 +168,9 @@ export const isStartMessage = (text: string) => /^\s*(start|subscribe|opt in)\s*
 export const TEMPLATE_BODIES: Record<string, string> = {
   [TEMPLATE_REMINDER]: "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. See you at the academy!",
   [TEMPLATE_REMINDER_PROGRESS]:
+    "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. Classes completed so far: {{4}} of {{5}}. See you at the academy!",
+  [TEMPLATE_REMINDER_BUTTONS]: "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. See you at the academy!",
+  [TEMPLATE_REMINDER_PROGRESS_BUTTONS]:
     "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. Classes completed so far: {{4}} of {{5}}. See you at the academy!",
   [TEMPLATE_RESCHEDULED]:
     "Hello! An update from The Musiq Academy: {{1}}'s {{2}} class on {{3}} has been rescheduled to {{4}}. Please reply here if this time doesn't work.",
@@ -174,11 +189,16 @@ export type ClassProgress = { used: number; total: number };
 // (e.g. 13 of 28); one without gets the plain reminder.
 export function reminderMessage(
   r: { studentName: string; courseName: string; startTime: string },
-  progress: ClassProgress | null
-): { template: string; params: string[] } {
+  progress: ClassProgress | null,
+  // When set, the template with buttons is used and these are the ids the two
+  // buttons ("Can't attend", "Reschedule") send back.
+  buttonPayloads?: string[]
+): { template: string; params: string[]; buttonPayloads?: string[] } {
   const base = [r.studentName, r.courseName, clockLabel(r.startTime)];
-  if (!progress || progress.total <= 0) return { template: TEMPLATE_REMINDER, params: base };
-  return { template: TEMPLATE_REMINDER_PROGRESS, params: [...base, String(Math.max(0, progress.used)), String(progress.total)] };
+  const withProgress = !!progress && progress.total > 0;
+  const params = withProgress ? [...base, String(Math.max(0, progress.used)), String(progress.total)] : base;
+  if (buttonPayloads) return { template: withProgress ? TEMPLATE_REMINDER_PROGRESS_BUTTONS : TEMPLATE_REMINDER_BUTTONS, params, buttonPayloads };
+  return { template: withProgress ? TEMPLATE_REMINDER_PROGRESS : TEMPLATE_REMINDER, params };
 }
 
 // "27 Oct, 4:41 pm" in India time, whatever time zone the server runs in.

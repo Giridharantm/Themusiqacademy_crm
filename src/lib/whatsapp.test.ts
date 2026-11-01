@@ -34,7 +34,7 @@ describe("parseInboundMessages", () => {
         messages: [{ id: "wamid.1", from: "919845708094", type: "text", text: { body: " Hi, guitar classes? " } }],
       })
     );
-    expect(msgs).toEqual([{ id: "wamid.1", from: "919845708094", name: "Aldrin", text: "Hi, guitar classes?", type: "text", at: null }]);
+    expect(msgs).toEqual([{ id: "wamid.1", from: "919845708094", name: "Aldrin", text: "Hi, guitar classes?", type: "text", at: null, replyId: null }]);
   });
 
   it("describes non-text messages and reads button and list replies", () => {

@@ -22,7 +22,7 @@ function nextOn(dayOfWeek: string, from: Date) {
 export default async function ChangesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ on?: string; q?: string; studentId?: string; batchId?: string; date?: string; error?: string; saved?: string }>;
+  searchParams: Promise<{ on?: string; q?: string; studentId?: string; batchId?: string; date?: string; error?: string; saved?: string; messaged?: string }>;
 }) {
   const sp = await searchParams;
   const { today } = istToday();
@@ -70,7 +70,11 @@ export default async function ChangesPage({
         subtitle={`A missed class can be made up the same day or within ${COMP_WORKING_DAYS} working days. Drums, Keyboard and Guitar may move to another day; the other instruments only to another time on the same day.`}
       />
 
-      {sp.saved && <p className="mb-4 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">Saved. Let the family know it is confirmed.</p>}
+      {sp.saved && (
+        <p className="mb-4 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">
+          {sp.messaged ? "Saved, and the family has been messaged on WhatsApp." : "Saved. Let the family know it is confirmed."}
+        </p>
+      )}
       {sp.error && <p className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{sp.error}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -206,6 +210,12 @@ export default async function ChangesPage({
                       </li>
                     </ul>
                     <Input label="Note (optional)" name="note" placeholder="e.g. Out of town" />
+                    {options.length > 0 && (
+                      <label className="flex items-start gap-2 text-sm text-slate-700">
+                        <input type="checkbox" name="notify" defaultChecked className="mt-0.5" />
+                        <span>Message the family on WhatsApp about the new slot <span className="text-slate-400">(if they have agreed to WhatsApp)</span></span>
+                      </label>
+                    )}
                     <Button type="submit" className="w-full">Book</Button>
                   </form>
                 )}
