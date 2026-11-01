@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addWorkingDays, dateKey, isWorkingDay, seatLimit, slotOptions, type SlotBatch } from "./reschedule";
+import { addWorkingDays, changeOutcome, dateKey, isWorkingDay, makeUpDeadline, seatLimit, slotOptions, type SlotBatch } from "./reschedule";
 
 const d = (s: string) => {
   const [y, m, day] = s.split("-").map(Number);
@@ -116,5 +116,33 @@ describe("slotOptions", () => {
   it("never offers a Monday", () => {
     const opts = slotOptions({ ...base, course: guitar, batches: [...batches, batch("mon", "MON", "17:00")], from: { batchId: "sun11", date: d("2026-11-08") }, today: d("2026-11-08"), nowMinutes: 0 });
     expect(opts.some((o) => o.batchId === "mon")).toBe(false);
+  });
+});
+
+describe("makeUpDeadline and changeOutcome", () => {
+  const skip = { kind: "SKIP" as const, status: "BOOKED" as const, fromDate: d("2026-11-03"), toDate: null };
+  const move = { kind: "MOVE" as const, status: "BOOKED" as const, fromDate: d("2026-11-03"), toDate: d("2026-11-05") };
+
+  it("gives a day-movable instrument 5 working days and others only the day itself", () => {
+    expect(dateKey(makeUpDeadline(true, d("2026-11-03")))).toBe("2026-11-08");
+    expect(dateKey(makeUpDeadline(false, d("2026-11-03")))).toBe("2026-11-03");
+  });
+
+  it("keeps a skip owed until its deadline, then expires it", () => {
+    expect(changeOutcome({ ...skip, canMoveDay: true }, d("2026-11-08"), false)).toBe("OWED");
+    expect(changeOutcome({ ...skip, canMoveDay: true }, d("2026-11-10"), false)).toBe("EXPIRED");
+    expect(changeOutcome({ ...skip, canMoveDay: false }, d("2026-11-03"), false)).toBe("OWED");
+    expect(changeOutcome({ ...skip, canMoveDay: false }, d("2026-11-04"), false)).toBe("EXPIRED");
+  });
+
+  it("tracks a make-up from booked to attended or didn't come", () => {
+    expect(changeOutcome({ ...move, canMoveDay: true }, d("2026-11-04"), false)).toBe("UPCOMING");
+    expect(changeOutcome({ ...move, canMoveDay: true }, d("2026-11-05"), false)).toBe("UPCOMING"); // the day itself
+    expect(changeOutcome({ ...move, canMoveDay: true }, d("2026-11-06"), false)).toBe("NO_SHOW");
+    expect(changeOutcome({ ...move, canMoveDay: true }, d("2026-11-06"), true)).toBe("ATTENDED");
+  });
+
+  it("shows a cancelled booking as cancelled", () => {
+    expect(changeOutcome({ ...move, status: "CANCELLED", canMoveDay: true }, d("2026-11-04"), false)).toBe("CANCELLED");
   });
 });

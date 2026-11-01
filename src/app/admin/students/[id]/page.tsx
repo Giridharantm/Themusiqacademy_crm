@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { currentUser } from "@/lib/authz";
+import { loadTracked } from "@/lib/class-changes";
+import { OUTCOME_LABELS, type ChangeOutcome } from "@/lib/reschedule";
 import { isPlaceholderEmail } from "@/lib/login";
 import {
   addGuardian,
@@ -39,6 +41,8 @@ import { recordStudentPayment, raiseInvoiceFromPayments } from "@/lib/actions/bi
 import { subscriptionTotals, countUsedClasses, attendanceForSubscription, addDays, PLAN_LABELS } from "@/lib/subscription";
 import { DAY_LABELS, formatTimeLabel } from "@/lib/schedule";
 import { format } from "date-fns";
+
+const OUTCOME_COLORS: Record<ChangeOutcome, string> = { OWED: "yellow", EXPIRED: "red", UPCOMING: "blue", ATTENDED: "green", NO_SHOW: "red", CANCELLED: "slate" };
 
 const statusColors: Record<string, string> = {
   PENDING: "yellow",
@@ -81,6 +85,8 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   // invoices); subscription changes, bonus classes, deletes and WhatsApp reminder
   // controls stay with the admin.
   const isAdmin = (await currentUser())?.role === "ADMIN";
+
+  const classChanges = (await loadTracked({ studentId: student.id })).reverse();
 
   const todayDateOnly = new Date();
   todayDateOnly.setHours(0, 0, 0, 0);
@@ -525,6 +531,33 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         </div>
 
         <div className="space-y-6">
+          <Card>
+            <CardHeader
+              title="Skipped and make-up classes"
+              action={<Link href={`/admin/changes?studentId=${student.id}`} className="text-sm text-indigo-600 hover:underline">Book one</Link>}
+            />
+            {classChanges.length === 0 ? (
+              <CardBody>
+                <EmptyState text="No skipped or make-up classes" />
+              </CardBody>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {classChanges.map((c) => (
+                  <li key={c.id} className="px-5 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm text-slate-900">{c.course.name} · missed {format(c.fromDate, "EEE d MMM")} {formatTimeLabel(c.fromBatch.startTime)}</p>
+                      <Badge color={OUTCOME_COLORS[c.outcome]}>{OUTCOME_LABELS[c.outcome]}</Badge>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {c.toBatch && c.toDate ? `Make-up ${format(c.toDate, "EEE d MMM")} ${formatTimeLabel(c.toBatch.startTime)}` : `No make-up booked${c.outcome === "OWED" ? ` — by ${format(c.deadline, "EEE d MMM")}` : ""}`}
+                      {" · "}booked by {c.source === "whatsapp" ? "the family on WhatsApp" : c.source === "admin" ? "admin" : "front desk"}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
           <Card>
             <CardHeader title="Follow-ups" subtitle="For a student to call back later instead of renewing now" />
             <CardBody>

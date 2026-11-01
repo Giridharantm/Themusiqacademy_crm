@@ -93,3 +93,37 @@ export function slotOptions(input: {
 
   return options.sort((a, b) => a.dateKey.localeCompare(b.dateKey) || a.startTime.localeCompare(b.startTime));
 }
+
+// The last day a missed class can still be made up. A class that can't move day
+// only has the day itself.
+export function makeUpDeadline(canMoveDay: boolean, fromDate: Date): Date {
+  return canMoveDay ? addWorkingDays(fromDate, COMP_WORKING_DAYS) : new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
+}
+
+export type ChangeOutcome = "OWED" | "EXPIRED" | "UPCOMING" | "ATTENDED" | "NO_SHOW" | "CANCELLED";
+
+// Where a booked change stands today, for tracking:
+//  - a skip with no new slot is OWED a make-up until its deadline, then EXPIRED;
+//  - a make-up is UPCOMING until its day is over, then ATTENDED or a NO_SHOW
+//    depending on whether attendance was marked for that date.
+export function changeOutcome(
+  c: { kind: "SKIP" | "MOVE"; status: "BOOKED" | "CANCELLED"; fromDate: Date; toDate: Date | null; canMoveDay: boolean },
+  today: Date,
+  attendedOnToDate: boolean
+): ChangeOutcome {
+  if (c.status === "CANCELLED") return "CANCELLED";
+  const todayKey = dateKey(today);
+  if (c.kind === "SKIP") return dateKey(makeUpDeadline(c.canMoveDay, c.fromDate)) >= todayKey ? "OWED" : "EXPIRED";
+  const toKey = c.toDate ? dateKey(c.toDate) : todayKey;
+  if (attendedOnToDate) return "ATTENDED";
+  return toKey >= todayKey ? "UPCOMING" : "NO_SHOW";
+}
+
+export const OUTCOME_LABELS: Record<ChangeOutcome, string> = {
+  OWED: "Make-up owed",
+  EXPIRED: "Make-up expired",
+  UPCOMING: "Booked",
+  ATTENDED: "Attended",
+  NO_SHOW: "Didn't come",
+  CANCELLED: "Cancelled",
+};

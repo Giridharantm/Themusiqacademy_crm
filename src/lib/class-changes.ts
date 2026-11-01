@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/attendance";
 import { dayCodeFromDate } from "@/lib/schedule";
 import { istDateString } from "@/lib/whatsapp-notices";
-import { COMP_WORKING_DAYS, addWorkingDays, dateKey, isWorkingDay, seatLimit, slotOptions, type SlotOption } from "@/lib/reschedule";
+import { COMP_WORKING_DAYS, addWorkingDays, changeOutcome, dateKey, isWorkingDay, makeUpDeadline, seatLimit, slotOptions, type SlotOption } from "@/lib/reschedule";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -158,4 +158,33 @@ export async function cancelClassChange(changeId: string): Promise<void> {
 export async function seatSummary(batches: { id: string; maxStudents: number | null; course: { maxStudents: number | null } }[], date: Date) {
   const taken = await seatsTakenByDate(prisma, batches.map((b) => b.id), [date]);
   return new Map(batches.map((b) => [b.id, { taken: taken.get(`${b.id}|${dateKey(date)}`) ?? 0, limit: seatLimit(b, b.course) }]));
+}
+
+// Booked or past changes with where each one stands today (owed, booked,
+// attended, didn't come, expired), for the tracking views. A make-up counts as
+// attended when attendance was marked for that student, instrument and date.
+export async function loadTracked(where: Prisma.ClassChangeWhereInput, now = new Date()) {
+  const { today } = istToday(now);
+  const changes = await prisma.classChange.findMany({
+    where,
+    include: { student: true, course: true, fromBatch: true, toBatch: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const moves = changes.filter((c) => c.kind === "MOVE" && c.status === "BOOKED" && c.toDate);
+  const present = moves.length
+    ? await prisma.attendance.findMany({
+        where: { status: "PRESENT", OR: moves.map((c) => ({ studentId: c.studentId, courseId: c.courseId, date: c.toDate! })) },
+        select: { studentId: true, courseId: true, date: true },
+      })
+    : [];
+  const attended = new Set(present.map((a) => `${a.studentId}|${a.courseId}|${dateKey(a.date)}`));
+  return changes.map((c) => ({
+    ...c,
+    deadline: makeUpDeadline(c.course.canMoveDay, c.fromDate),
+    outcome: changeOutcome(
+      { kind: c.kind, status: c.status, fromDate: c.fromDate, toDate: c.toDate, canMoveDay: c.course.canMoveDay },
+      today,
+      !!c.toDate && attended.has(`${c.studentId}|${c.courseId}|${dateKey(c.toDate)}`)
+    ),
+  }));
 }

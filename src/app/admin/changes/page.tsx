@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { bookClassChange, cancelClassChange } from "@/lib/actions/class-change-actions";
-import { slotOptionsFor, istToday } from "@/lib/class-changes";
+import { slotOptionsFor, istToday, loadTracked } from "@/lib/class-changes";
 import { parseDateOnly } from "@/lib/attendance";
-import { COMP_WORKING_DAYS, addDaysTo, dateKey } from "@/lib/reschedule";
+import { COMP_WORKING_DAYS, OUTCOME_LABELS, addDaysTo, dateKey, type ChangeOutcome } from "@/lib/reschedule";
 import { DAY_LABELS, dayCodeFromDate, formatTimeLabel } from "@/lib/schedule";
 import { normalizeSearchQuery, phoneSearchDigits } from "@/lib/search";
 import { Card, CardBody, CardHeader, PageHeader, Input, Button, Badge, EmptyState } from "@/components/ui";
@@ -11,6 +11,10 @@ import { SearchBox } from "@/components/search-box";
 import { format } from "date-fns";
 
 const dayLabel = (d: Date) => format(d, "EEE d MMM");
+
+const OUTCOME_COLORS: Record<ChangeOutcome, string> = { OWED: "yellow", EXPIRED: "red", UPCOMING: "blue", ATTENDED: "green", NO_SHOW: "red", CANCELLED: "slate" };
+
+const SOURCE_LABELS: Record<string, string> = { "front-desk": "front desk", admin: "admin", whatsapp: "family on WhatsApp" };
 
 // The next date on or after `from` that falls on the given weekday code.
 function nextOn(dayOfWeek: string, from: Date) {
@@ -30,11 +34,26 @@ export default async function ChangesPage({
   const q = normalizeSearchQuery(sp.q);
   const phoneDigits = q ? phoneSearchDigits(q) : undefined;
 
-  const changes = await prisma.classChange.findMany({
-    where: { status: "BOOKED", OR: [{ fromDate: on }, { toDate: on }] },
-    include: { student: true, course: true, fromBatch: true, toBatch: true },
-    orderBy: { createdAt: "asc" },
-  });
+  const changes = await loadTracked({ status: "BOOKED", OR: [{ fromDate: on }, { toDate: on }] });
+
+  // Skips whose make-up hasn't been booked yet, soonest deadline first.
+  const owed = (await loadTracked({ status: "BOOKED", kind: "SKIP", student: { status: "ACTIVE" }, fromDate: { gte: addDaysTo(today, -14) } }))
+    .filter((c) => c.outcome === "OWED")
+    .sort((a, b) => dateKey(a.deadline).localeCompare(dateKey(b.deadline)) || a.student.name.localeCompare(b.student.name));
+
+  // Everything happening in the next 7 days, by day.
+  const weekEnd = addDaysTo(today, 6);
+  const week = await loadTracked({ status: "BOOKED", student: { status: "ACTIVE" }, OR: [{ fromDate: { gte: today, lte: weekEnd } }, { toDate: { gte: today, lte: weekEnd } }] });
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDaysTo(today, i)).filter((d) => dayCodeFromDate(d) !== "MON");
+  const weekLines = weekDays
+    .map((d) => ({
+      date: d,
+      lines: week.flatMap((c) => [
+        ...(dateKey(c.fromDate) === dateKey(d) ? [{ c, kind: c.kind === "MOVE" ? ("away" as const) : ("skip" as const) }] : []),
+        ...(c.toDate && dateKey(c.toDate) === dateKey(d) ? [{ c, kind: "makeup" as const }] : []),
+      ]),
+    }))
+    .filter((d) => d.lines.length > 0);
 
   const matches = q
     ? await prisma.student.findMany({
@@ -78,7 +97,72 @@ export default async function ChangesPage({
       {sp.error && <p className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{sp.error}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader title={`Make-ups owed (${owed.length})`} subtitle="Missed classes with no new slot yet. They can't be made up after the last day shown" />
+            {owed.length === 0 ? (
+              <CardBody>
+                <EmptyState text="Nobody is waiting for a make-up" />
+              </CardBody>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {owed.map((c) => {
+                  const days = Math.round((parseDateOnly(dateKey(c.deadline)).getTime() - today.getTime()) / 86_400_000);
+                  return (
+                    <li key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-900">
+                          {c.student.name} <span className="text-slate-400 font-normal">· {c.course.name}</span>
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Missed {dayLabel(c.fromDate)} {formatTimeLabel(c.fromBatch.startTime)} · make up by {dayLabel(c.deadline)}
+                          {days <= 0 ? " (today)" : days === 1 ? " (tomorrow)" : ""} · {SOURCE_LABELS[c.source] ?? c.source}
+                        </p>
+                      </div>
+                      <Link
+                        href={`/admin/changes?studentId=${c.studentId}&batchId=${c.fromBatchId}&date=${dateKey(c.fromDate)}`}
+                        className="text-sm text-indigo-600 hover:underline shrink-0"
+                      >
+                        Book a slot
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+
+          <Card>
+            <CardHeader title="Next 7 days" subtitle="Who is not coming, who is coming for a make-up" />
+            {weekLines.length === 0 ? (
+              <CardBody>
+                <EmptyState text="No changes booked for the coming week" />
+              </CardBody>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {weekLines.map(({ date, lines }) => (
+                  <div key={dateKey(date)} className="px-5 py-3">
+                    <Link href={`/admin/changes?on=${dateKey(date)}`} className="text-sm font-medium text-slate-900 hover:text-indigo-600">
+                      {dayLabel(date)}
+                    </Link>
+                    <ul className="mt-1 space-y-0.5">
+                      {lines.map(({ c, kind }) => (
+                        <li key={`${c.id}-${kind}`} className="text-xs text-slate-600">
+                          <span className="font-medium text-slate-800">{c.student.name}</span> · {c.course.name} ·{" "}
+                          {kind === "makeup" && c.toBatch
+                            ? `coming for a make-up at ${formatTimeLabel(c.toBatch.startTime)} (missed ${dayLabel(c.fromDate)})`
+                            : kind === "away" && c.toBatch && c.toDate
+                              ? `not at ${formatTimeLabel(c.fromBatch.startTime)}, moved to ${dayLabel(c.toDate)} ${formatTimeLabel(c.toBatch.startTime)}`
+                              : `not coming to the ${formatTimeLabel(c.fromBatch.startTime)} class`}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
           <Card>
             <CardHeader
               title={`Changes on ${dayLabel(on)}`}
@@ -109,11 +193,13 @@ export default async function ChangesPage({
                               ? `Not at ${formatTimeLabel(c.fromBatch.startTime)} — moved to ${dayLabel(c.toDate)} ${formatTimeLabel(c.toBatch.startTime)}`
                               : `Not coming to the ${formatTimeLabel(c.fromBatch.startTime)} class`
                             : `Make-up for ${dayLabel(c.fromDate)} ${formatTimeLabel(c.fromBatch.startTime)} — comes at ${formatTimeLabel(c.toBatch!.startTime)}`}
-                          {c.note ? ` · ${c.note}` : ""}
+                          {c.note ? ` · ${c.note}` : ""} · booked by {SOURCE_LABELS[c.source] ?? c.source}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <Badge color={awayToday ? "yellow" : "blue"}>{awayToday ? (c.kind === "MOVE" ? "Moved away" : "Not coming") : "Make-up"}</Badge>
+                        <Badge color={awayToday ? "yellow" : OUTCOME_COLORS[c.outcome]}>
+                          {awayToday ? (c.kind === "MOVE" ? "Moved away" : "Not coming") : OUTCOME_LABELS[c.outcome] === "Booked" ? "Make-up" : OUTCOME_LABELS[c.outcome]}
+                        </Badge>
                         <form action={cancelClassChange.bind(null, c.id, dateKey(on))}>
                           <Button type="submit" variant="ghost">Cancel</Button>
                         </form>
