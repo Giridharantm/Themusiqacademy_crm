@@ -159,7 +159,7 @@ export default async function AdminDashboard() {
         <StatCard label="Open leads" value={totalOpenLeads} hint={leadsHint} href="/admin/leads?status=open" />
         <StatCard label="Active students" value={activeStudents} href="/admin/students?status=ACTIVE" />
         <StatCard label="Renewals due soon" value={renewalsDueSoon} hint={`Fewer than ${LOW_CLASSES_THRESHOLD} classes remaining`} href="/admin/students?renewal=under6" />
-        <StatCard label="Classes today" value={todaysBatches.length} href={`/admin/batches?day=${todayCode}`} />
+        <StatCard label="Classes today" value={todaysBatches.length} hint="Who is in each slot today" href="/admin/schedule" />
         <StatCard label="Make-ups owed" value={makeUpsOwed} hint="Missed classes with no new slot booked yet" href="/admin/changes" />
         {isAdmin && <StatCard label="Revenue this month" value={`Rs. ${revenueThisMonth.toLocaleString("en-IN")}`} hint="Paid invoices raised this month" href="/admin/billing" />}
         <StatCard label="Outstanding dues" value={`Rs. ${outstandingDues.toLocaleString("en-IN")}`} hint="Pending, partial & overdue invoices" href="/admin/billing" />

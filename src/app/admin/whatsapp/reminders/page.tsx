@@ -226,6 +226,7 @@ export default async function RemindersPage({
                       {" "}
                       · {r.courseName} · {clockLabel(r.startTime)}
                     </span>
+                    {r.makeUp && <span className="ml-2 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">make-up</span>}
                   </p>
                   <p className="text-xs text-slate-500 mt-0.5">
                     {r.phone ?? "No phone number"}

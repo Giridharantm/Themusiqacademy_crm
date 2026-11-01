@@ -55,7 +55,7 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
 
   const isReschedule = type === "RESCHEDULE";
   const ready = selectedBatches.length > 0 && (isReschedule ? !!newDateStr && !!newTime : message.trim().length > 0);
-  const recipients = sp.preview && ready ? await recipientsForBatches(selectedBatches.map((b) => b.id)) : null;
+  const recipients = sp.preview && ready ? await recipientsForBatches(selectedBatches.map((b) => b.id), parseDateOnly(dateStr)) : null;
 
   const willReceive = recipients ? recipients.reduce((n, r) => n + r.phones.filter((p) => p.consented).length, 0) : 0;
 

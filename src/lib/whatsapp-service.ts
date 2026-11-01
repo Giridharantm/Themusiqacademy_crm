@@ -93,21 +93,38 @@ export type ClassRecipient = {
   // this instrument (same numbers as the student page); null if they have none.
   progress: ClassProgress | null;
   remindersOff: boolean;
+  makeUp: boolean; // here for a one-off make-up class on the date asked for, not their regular class
   phones: { phone: string; consented: boolean }[];
 };
 
 // Everyone enrolled (actively, and as an active student) in these batches,
 // with the number(s) to message and whether each has agreed to WhatsApp.
-export async function recipientsForBatches(batchIds: string[]): Promise<ClassRecipient[]> {
+//
+// With `date`, students booked to make a class up in one of these batches ON
+// THAT DATE are included too (marked makeUp) — a family told "come Wednesday at
+// 6" gets the Wednesday reminder and any notice for that class.
+export async function recipientsForBatches(batchIds: string[], date?: Date): Promise<ClassRecipient[]> {
   if (batchIds.length === 0) return [];
-  const enrollments = await prisma.enrollment.findMany({
+  const include = {
+    student: { include: { guardians: { include: { user: { select: { phone: true } } } } } },
+    batch: { include: { course: true, teacher: true } },
+  } as const;
+  const regular = await prisma.enrollment.findMany({
     where: { status: "ACTIVE", student: { status: "ACTIVE" }, batchId: { in: batchIds } },
-    include: {
-      student: { include: { guardians: { include: { user: { select: { phone: true } } } } } },
-      batch: { include: { course: true, teacher: true } },
-    },
+    include,
     orderBy: [{ batch: { startTime: "asc" } }, { student: { name: "asc" } }],
   });
+
+  const makeUps = date
+    ? await prisma.classChange.findMany({
+        where: { status: "BOOKED", kind: "MOVE", toDate: date, toBatchId: { in: batchIds }, student: { status: "ACTIVE" } },
+        include: { student: include.student, toBatch: include.batch },
+      })
+    : [];
+  const enrollments = [
+    ...regular.map((e) => ({ studentId: e.studentId, batchId: e.batchId, student: e.student, batch: e.batch, makeUp: false })),
+    ...makeUps.map((c) => ({ studentId: c.studentId, batchId: c.toBatchId!, student: c.student, batch: c.toBatch!, makeUp: true })),
+  ].sort((a, b) => a.batch.startTime.localeCompare(b.batch.startTime) || a.student.name.localeCompare(b.student.name));
 
   // Current (ACTIVE) subscription per student + instrument, with the live
   // attendance count — computed exactly as on the student page.
@@ -137,6 +154,7 @@ export async function recipientsForBatches(batchIds: string[]): Promise<ClassRec
     teacherName: e.batch.teacher?.name ?? null,
     progress: progressOf(e.studentId, e.batch.courseId),
     remindersOff: e.student.remindersOff,
+    makeUp: e.makeUp,
     phones: recipientPhones(e.student.guardians.map((g) => g.user.phone), e.student.phone),
   }));
 
@@ -246,6 +264,7 @@ export type ReminderPlanRow = {
   progress: ClassProgress | null;
   remindersOff: boolean;
   skipped: boolean;
+  makeUp: boolean; // a one-off make-up class, not their regular one
   phone: string | null;
   decision: ReminderDecision;
   // What happened if a reminder for this row has already been tried.
@@ -268,7 +287,7 @@ export async function planReminders(dateStr: string): Promise<ReminderPlan> {
   const noticeBatches = new Set(notices.flatMap((n) => n.batchIds));
 
   const batches = await batchesOnDate(date);
-  const recipients = await recipientsForBatches(batches.map((b) => b.id));
+  const recipients = await recipientsForBatches(batches.map((b) => b.id), date);
   const skips = await prisma.reminderSkip.findMany({ where: { date, studentId: { in: recipients.map((r) => r.studentId) } }, select: { studentId: true } });
   const skipped = new Set(skips.map((k) => k.studentId));
 
@@ -286,12 +305,14 @@ export async function planReminders(dateStr: string): Promise<ReminderPlan> {
         teacherName: r.teacherName,
         progress: r.progress,
         remindersOff: r.remindersOff,
-        skipped: skipped.has(r.studentId),
+        skipped: skipped.has(r.studentId) && !r.makeUp,
+        makeUp: r.makeUp,
         phone,
         decision: reminderDecision({
           classHasNotice: noticeBatches.has(r.batchId),
           studentOff: r.remindersOff,
-          skippedToday: skipped.has(r.studentId),
+          // The skip is for the class they're missing; a make-up that same day is a different class.
+          skippedToday: skipped.has(r.studentId) && !r.makeUp,
           phone,
           consented,
         }),
@@ -345,7 +366,8 @@ export async function runClassReminders(now = new Date()): Promise<ReminderRun> 
       kind: "REMINDER",
       phone: row.phone,
       studentId: row.studentId,
-      ...reminderMessage(row, row.progress, buttons ? reminderButtonPayloads(row, dateStr) : undefined),
+      // No buttons on a make-up reminder: "can't attend" there has no regular class to cancel.
+      ...reminderMessage(row, row.progress, buttons && !row.makeUp ? reminderButtonPayloads(row, dateStr) : undefined),
       summary: `${row.courseName} ${clockLabel(row.startTime)} · ${row.studentName}`,
       dedupeKey: row.key,
     });
@@ -386,7 +408,7 @@ export async function createAndSendNotice(input: NoticeInput): Promise<{ noticeI
     },
   });
 
-  const recipients = await recipientsForBatches(batchIds);
+  const recipients = await recipientsForBatches(batchIds, parseDateOnly(dateStr));
   const tally = emptyTally();
   for (const r of recipients) {
     for (const { phone, consented } of r.phones) {
