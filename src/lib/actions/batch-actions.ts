@@ -48,6 +48,9 @@ export async function updateBatch(batchId: string, formData: FormData) {
   const dayOfWeek = String(formData.get("dayOfWeek") ?? "");
   const timeSlot = String(formData.get("timeSlot") ?? "");
   const room = String(formData.get("room") ?? "").trim() || null;
+  const maxRaw = String(formData.get("maxStudents") ?? "").trim();
+  const maxStudents = maxRaw === "" ? null : Math.floor(Number(maxRaw));
+  if (maxStudents !== null && (!Number.isFinite(maxStudents) || maxStudents < 1)) throw new Error("The limit must be a number of 1 or more, or blank to use the instrument's");
 
   const [startTime, endTime] = timeSlot.split("|");
 
@@ -67,7 +70,7 @@ export async function updateBatch(batchId: string, formData: FormData) {
 
   await prisma.batch.update({
     where: { id: batchId },
-    data: { name, teacherId, dayOfWeek, startTime, endTime, room },
+    data: { name, teacherId, dayOfWeek, startTime, endTime, room, maxStudents },
   });
 
   revalidatePath("/admin/batches");

@@ -16,6 +16,7 @@ describe("canAccessAdminPath", () => {
       "/admin/students",
       "/admin/students/abc123",
       "/admin/attendance",
+      "/admin/changes",
       "/admin/batches",
       "/admin/batches/abc123",
       "/admin/billing",

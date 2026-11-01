@@ -9,6 +9,7 @@ const links = [
   { href: "/admin/leads", label: "Leads" },
   { href: "/admin/students", label: "Students" },
   { href: "/admin/attendance", label: "Attendance" },
+  { href: "/admin/changes", label: "Class changes" },
   { href: "/admin/courses", label: "Courses" },
   { href: "/admin/batches", label: "Batches" },
   { href: "/admin/teachers", label: "Teachers" },

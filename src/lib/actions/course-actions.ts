@@ -20,6 +20,21 @@ export async function createCourse(formData: FormData) {
   revalidatePath("/admin/courses");
 }
 
+// The instrument's seat limit (blank = no limit) and whether a missed class may
+// be made up on another day or only at another time the same day.
+export async function updateCourseRules(courseId: string, formData: FormData) {
+  await requireRole("ADMIN");
+
+  const raw = String(formData.get("maxStudents") ?? "").trim();
+  const maxStudents = raw === "" ? null : Math.floor(Number(raw));
+  if (maxStudents !== null && (!Number.isFinite(maxStudents) || maxStudents < 1)) throw new Error("The limit must be a number of 1 or more, or blank for no limit");
+  const canMoveDay = formData.get("canMoveDay") === "on";
+
+  await prisma.course.update({ where: { id: courseId }, data: { maxStudents, canMoveDay } });
+  revalidatePath("/admin/courses");
+  revalidatePath("/admin/batches");
+}
+
 export async function deleteCourse(courseId: string) {
   await requireRole("ADMIN");
 

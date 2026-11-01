@@ -47,10 +47,11 @@ export default async function AttendancePage({
   const courses = await prisma.course.findMany({ orderBy: { name: "asc" } });
   const selectedCourse = courseId ? courses.find((c) => c.id === courseId) : null;
 
-  type RosterStudent = { id: string; name: string; marked: boolean };
+  type RosterStudent = { id: string; name: string; marked: boolean; tag?: string };
   let batchGroups: { batchId: string; label: string; students: RosterStudent[] }[] = [];
   let otherStudents: RosterStudent[] = [];
   let addableStudents: { id: string; name: string; studentCode: string }[] = [];
+  let notComing: { id: string; name: string; detail: string }[] = [];
 
   if (selectedCourse) {
     const selectedDayCode = dayCodeFromDate(parseDateOnly(selectedDate));
@@ -95,7 +96,32 @@ export default async function AttendancePage({
       }
       groupMap.get(b.id)!.students.push({ id: e.studentId, name: e.student.name, marked: markedIds.has(e.studentId) });
     }
-    batchGroups = Array.from(groupMap.values());
+    // Booked class changes for this day: students who skipped or moved away
+    // aren't expected, and students making a class up here join its roster.
+    const dayDate = parseDateOnly(selectedDate);
+    const [awayChanges, comingChanges] = await Promise.all([
+      prisma.classChange.findMany({ where: { status: "BOOKED", courseId: selectedCourse.id, fromDate: dayDate, student: { status: "ACTIVE" } }, include: { student: true, toBatch: true } }),
+      prisma.classChange.findMany({ where: { status: "BOOKED", kind: "MOVE", courseId: selectedCourse.id, toDate: dayDate, student: { status: "ACTIVE" } }, include: { student: true, toBatch: { include: { teacher: true } } } }),
+    ]);
+    const awayKeys = new Set(awayChanges.map((c) => `${c.fromBatchId}|${c.studentId}`));
+    notComing = awayChanges.map((c) => ({
+      id: c.studentId,
+      name: c.student.name,
+      detail: c.toBatch && c.toDate ? `moved to ${format(c.toDate, "EEE")} ${formatTimeLabel(c.toBatch.startTime)}` : "skipping",
+    }));
+    for (const g of groupMap.values()) g.students = g.students.filter((s) => !awayKeys.has(`${g.batchId}|${s.id}`) || s.marked);
+    const startTimes = new Map(enrollments.map((e) => [e.batchId, e.batch.startTime]));
+    for (const c of comingChanges) {
+      const b = c.toBatch!;
+      if (!groupMap.has(b.id)) {
+        groupMap.set(b.id, { batchId: b.id, label: `${formatTimeLabel(b.startTime)} - ${formatTimeLabel(b.endTime)} · ${b.teacher ? b.teacher.name : "Unassigned"}`, students: [] });
+        startTimes.set(b.id, b.startTime);
+      }
+      groupMap.get(b.id)!.students.push({ id: c.studentId, name: c.student.name, marked: markedIds.has(c.studentId), tag: "make-up" });
+    }
+    batchGroups = Array.from(groupMap.values())
+      .filter((g) => g.students.length > 0)
+      .sort((a, b) => (startTimes.get(a.batchId) ?? "").localeCompare(startTimes.get(b.batchId) ?? ""));
 
     const groupedIds = new Set(batchGroups.flatMap((g) => g.students.map((s) => s.id)));
     otherStudents = existingAttendance
@@ -195,6 +221,7 @@ export default async function AttendancePage({
                   totalCount={totalRosterCount}
                   markAction={markStudentPresentAsAdmin}
                   unmarkAction={unmarkStudentAsAdmin}
+                  notComing={notComing}
                 />
               </CardBody>
             </Card>

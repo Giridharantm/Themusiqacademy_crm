@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui";
 import { AttendanceCompSearch } from "@/components/attendance-comp-search";
 
-type Student = { id: string; name: string };
+type Student = { id: string; name: string; tag?: string };
 type MarkAction = (studentId: string, courseId: string, dateStr: string) => Promise<void>;
 
 function StudentRow({
@@ -55,6 +55,7 @@ export function AttendanceRoster({
   totalCount,
   markAction,
   unmarkAction,
+  notComing = [],
 }: {
   courseId: string;
   dateStr: string;
@@ -65,6 +66,8 @@ export function AttendanceRoster({
   totalCount: number;
   markAction: MarkAction;
   unmarkAction: MarkAction;
+  /** Booked class changes: not expected in this roster today. */
+  notComing?: { id: string; name: string; detail: string }[];
 }) {
   return (
     <div className="space-y-5">
@@ -74,6 +77,12 @@ export function AttendanceRoster({
           {markedCount} of {totalCount} marked
         </Badge>
       </div>
+
+      {notComing.length > 0 && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+          Not expected today: {notComing.map((n) => `${n.name} (${n.detail})`).join(", ")}
+        </p>
+      )}
 
       {batchGroups.length === 0 && otherStudents.length === 0 ? (
         <p className="text-sm text-slate-400 text-center py-4">No students scheduled — use search below to add someone</p>
@@ -96,6 +105,7 @@ export function AttendanceRoster({
                     dateStr={dateStr}
                     markAction={markAction}
                     unmarkAction={unmarkAction}
+                    tag={s.tag}
                   />
                 ))}
               </ul>
@@ -117,7 +127,7 @@ export function AttendanceRoster({
                 dateStr={dateStr}
                 markAction={markAction}
                 unmarkAction={unmarkAction}
-                tag="comp"
+                tag={s.tag ?? "comp"}
               />
             ))}
           </ul>

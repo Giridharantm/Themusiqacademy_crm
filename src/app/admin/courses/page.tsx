@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { createCourse, deleteCourse } from "@/lib/actions/course-actions";
+import { createCourse, deleteCourse, updateCourseRules } from "@/lib/actions/course-actions";
 import { Card, CardBody, CardHeader, PageHeader, Input, Textarea, Button, EmptyState, Badge } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
 import { normalizeSearchQuery } from "@/lib/search";
@@ -36,6 +36,21 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
                       <p className="text-sm font-medium text-slate-900">{c.name}</p>
                       <p className="text-xs text-slate-500 mt-0.5">{c.durationMinutes} min sessions</p>
                       {c.description && <p className="text-xs text-slate-400 mt-1">{c.description}</p>}
+                      <p className="text-xs text-slate-500 mt-1">
+                        {c.maxStudents ? `Up to ${c.maxStudents} students per class` : "No limit per class"} ·{" "}
+                        {c.canMoveDay ? "Make-ups can move to another day" : "Make-ups only at another time the same day"}
+                      </p>
+                      <details className="mt-1.5" key={`${c.maxStudents}-${c.canMoveDay}`}>
+                        <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none">Class size and make-up rules</summary>
+                        <form action={updateCourseRules.bind(null, c.id)} className="mt-2 space-y-3 max-w-xs">
+                          <Input label="Most students in one class" name="maxStudents" type="number" min="1" defaultValue={c.maxStudents ?? ""} hint="Leave blank for no limit" />
+                          <label className="flex items-center gap-2 text-sm text-slate-700">
+                            <input type="checkbox" name="canMoveDay" defaultChecked={c.canMoveDay} />
+                            A missed class can be made up on another day
+                          </label>
+                          <Button type="submit" variant="secondary">Save</Button>
+                        </form>
+                      </details>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge>{c._count.batches} batch{c._count.batches !== 1 ? "es" : ""}</Badge>

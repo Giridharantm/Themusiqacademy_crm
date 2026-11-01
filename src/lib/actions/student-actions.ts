@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { fullClassMessage } from "@/lib/capacity";
 import { requireRole } from "@/lib/authz";
 import { recordRegistrationConsent } from "@/lib/whatsapp-service";
 import { defaultLoginPassword } from "@/lib/login-password";
@@ -116,6 +117,15 @@ export async function enrollInBatch(studentId: string, formData: FormData) {
   const batches = await prisma.batch.findMany({ where: { id: { in: batchIds } } });
   if (batches.length !== batchIds.length) throw new Error("One or more batches were not found");
 
+  // A class at its limit takes no more students from front desk; the admin can
+  // still add one.
+  if (user.role !== "ADMIN") {
+    for (const batchId of batchIds) {
+      const full = await fullClassMessage(batchId);
+      if (full) throw new Error(full);
+    }
+  }
+
   // Re-enrolling is exactly the "they're back" signal — an inactive student
   // shouldn't need a separate manual "Mark Active" click on top of this.
   await prisma.student.update({ where: { id: studentId }, data: { status: "ACTIVE" } });
@@ -172,7 +182,7 @@ export async function enrollInBatch(studentId: string, formData: FormData) {
 // subscription exactly as it was — the destination course's own "no active
 // subscription" banner prompts for a new one, same as any fresh enrollment.
 export async function updateEnrollmentBatch(enrollmentId: string, studentId: string, formData: FormData) {
-  await requireRole("ADMIN", "FRONT_DESK");
+  const user = await requireRole("ADMIN", "FRONT_DESK");
 
   const newBatchId = String(formData.get("batchId") ?? "");
   if (!newBatchId) throw new Error("A batch is required");
@@ -188,6 +198,11 @@ export async function updateEnrollmentBatch(enrollmentId: string, studentId: str
     where: { studentId_batchId: { studentId, batchId: newBatchId } },
   });
   if (clash && clash.id !== enrollmentId) throw new Error("Already enrolled in that batch");
+
+  if (user.role !== "ADMIN" && enrollment.batchId !== newBatchId) {
+    const full = await fullClassMessage(newBatchId);
+    if (full) throw new Error(full);
+  }
 
   await prisma.enrollment.update({ where: { id: enrollmentId }, data: { batchId: newBatchId } });
 

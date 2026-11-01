@@ -6,6 +6,7 @@ import { Card, CardBody, CardHeader, PageHeader, Input, Select, Button, EmptySta
 import { BatchScheduleFields } from "@/components/batch-schedule-fields";
 import { BatchFilterFields } from "@/components/batch-filter-fields";
 import { DAY_LABELS, OPERATING_DAYS, formatTimeLabel, sortBatches } from "@/lib/schedule";
+import { seatLimit } from "@/lib/reschedule";
 
 export default async function BatchesPage({
   searchParams,
@@ -86,7 +87,12 @@ export default async function BatchesPage({
                         </p>
                       </Link>
                       <div className="flex items-center gap-2">
-                        <Badge>{b._count.enrollments} student{b._count.enrollments !== 1 ? "s" : ""}</Badge>
+                        {(() => {
+                          const limit = seatLimit(b, b.course);
+                          const n = b._count.enrollments;
+                          if (limit === null) return <Badge>{n} student{n !== 1 ? "s" : ""}</Badge>;
+                          return <Badge color={n > limit ? "red" : n === limit ? "yellow" : "slate"}>{n}/{limit}{n > limit ? " over" : n === limit ? " full" : ""}</Badge>;
+                        })()}
                         {isAdmin && (
                           <form action={deleteBatch.bind(null, b.id)}>
                             <Button type="submit" variant="ghost">Delete</Button>
@@ -95,7 +101,7 @@ export default async function BatchesPage({
                       </div>
                     </div>
                     {isAdmin && (
-<details className="mt-1.5" key={`${b.dayOfWeek}-${b.startTime}-${b.teacherId}-${b.room}`}>
+<details className="mt-1.5" key={`${b.dayOfWeek}-${b.startTime}-${b.teacherId}-${b.room}-${b.maxStudents}`}>
                       <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none">Edit</summary>
                       <form action={updateBatch.bind(null, b.id)} className="mt-2 space-y-3 max-w-sm">
                         <Select label="Teacher" name="teacherId" defaultValue={b.teacherId ?? ""}>
@@ -106,6 +112,7 @@ export default async function BatchesPage({
                         </Select>
                         <BatchScheduleFields defaultDay={b.dayOfWeek} defaultTimeSlot={`${b.startTime}|${b.endTime}`} />
                         <Input label="Room" name="room" placeholder="e.g. Room 1" defaultValue={b.room ?? ""} />
+                        <Input label="Most students in this class" name="maxStudents" type="number" min="1" defaultValue={b.maxStudents ?? ""} placeholder={b.course.maxStudents ? `${b.course.maxStudents} (the instrument's limit)` : "No limit"} hint="Leave blank to use the instrument's limit" />
                         <Button type="submit" variant="secondary" className="w-full">Save changes</Button>
                       </form>
                     </details>
