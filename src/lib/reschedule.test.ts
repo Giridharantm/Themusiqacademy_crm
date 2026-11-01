@@ -113,6 +113,15 @@ describe("slotOptions", () => {
     expect(opts).toEqual([]);
   });
 
+  it("never offers a day before today, even for a class missed earlier in the week", () => {
+    // Missed Tue 3 Nov, asking on Thu 5 Nov at 5 pm: nothing on Tue or Wed, and no earlier Thursday slot
+    const thursday = [...batches, batch("thu3", "THU", "15:00"), batch("thu6", "THU", "18:00"), batch("fri3", "FRI", "15:00")];
+    const opts = slotOptions({ ...base, today: d("2026-11-05"), nowMinutes: 17 * 60, course: guitar, batches: thursday, from: { batchId: "tue5", date: d("2026-11-03") } });
+    expect(opts.every((o) => o.dateKey >= "2026-11-05")).toBe(true);
+    expect(opts.some((o) => o.batchId === "thu3")).toBe(false); // 3 pm has gone
+    expect(opts.map((o) => `${o.dateKey} ${o.batchId}`)).toEqual(["2026-11-05 thu6", "2026-11-06 fri3", "2026-11-08 sun11"]);
+  });
+
   it("never offers a Monday", () => {
     const opts = slotOptions({ ...base, course: guitar, batches: [...batches, batch("mon", "MON", "17:00")], from: { batchId: "sun11", date: d("2026-11-08") }, today: d("2026-11-08"), nowMinutes: 0 });
     expect(opts.some((o) => o.batchId === "mon")).toBe(false);
