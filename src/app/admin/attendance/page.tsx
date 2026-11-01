@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { applyRosterChanges, type RosterGroup } from "@/lib/class-changes";
 import { markStudentPresentAsAdmin, unmarkStudentAsAdmin } from "@/lib/actions/attendance-actions";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Button, Select, EmptyState } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
@@ -83,7 +84,7 @@ export default async function AttendancePage({
     // Group the roster by batch — a class can run several time slots on the
     // same day, and a teacher marking 30+ students needs to see which
     // batch each one belongs to, not one flat alphabetical list.
-    const groupMap = new Map<string, { batchId: string; label: string; students: RosterStudent[] }>();
+    const groupMap = new Map<string, RosterGroup>();
     for (const e of enrollments) {
       const b = e.batch;
       if (!groupMap.has(b.id)) {
@@ -91,37 +92,21 @@ export default async function AttendancePage({
         groupMap.set(b.id, {
           batchId: b.id,
           label: `${formatTimeLabel(b.startTime)} - ${formatTimeLabel(b.endTime)} · ${teacherLabel}`,
+          startTime: b.startTime,
           students: [],
         });
       }
       groupMap.get(b.id)!.students.push({ id: e.studentId, name: e.student.name, marked: markedIds.has(e.studentId) });
     }
-    // Booked class changes for this day: students who skipped or moved away
-    // aren't expected, and students making a class up here join its roster.
-    const dayDate = parseDateOnly(selectedDate);
-    const [awayChanges, comingChanges] = await Promise.all([
-      prisma.classChange.findMany({ where: { status: "BOOKED", courseId: selectedCourse.id, fromDate: dayDate, student: { status: "ACTIVE" } }, include: { student: true, toBatch: true } }),
-      prisma.classChange.findMany({ where: { status: "BOOKED", kind: "MOVE", courseId: selectedCourse.id, toDate: dayDate, student: { status: "ACTIVE" } }, include: { student: true, toBatch: { include: { teacher: true } } } }),
-    ]);
-    const awayKeys = new Set(awayChanges.map((c) => `${c.fromBatchId}|${c.studentId}`));
-    notComing = awayChanges.map((c) => ({
-      id: c.studentId,
-      name: c.student.name,
-      detail: c.toBatch && c.toDate ? `moved to ${format(c.toDate, "EEE")} ${formatTimeLabel(c.toBatch.startTime)}` : "skipping",
-    }));
-    for (const g of groupMap.values()) g.students = g.students.filter((s) => !awayKeys.has(`${g.batchId}|${s.id}`) || s.marked);
-    const startTimes = new Map(enrollments.map((e) => [e.batchId, e.batch.startTime]));
-    for (const c of comingChanges) {
-      const b = c.toBatch!;
-      if (!groupMap.has(b.id)) {
-        groupMap.set(b.id, { batchId: b.id, label: `${formatTimeLabel(b.startTime)} - ${formatTimeLabel(b.endTime)} · ${b.teacher ? b.teacher.name : "Unassigned"}`, students: [] });
-        startTimes.set(b.id, b.startTime);
-      }
-      groupMap.get(b.id)!.students.push({ id: c.studentId, name: c.student.name, marked: markedIds.has(c.studentId), tag: "make-up" });
-    }
-    batchGroups = Array.from(groupMap.values())
-      .filter((g) => g.students.length > 0)
-      .sort((a, b) => (startTimes.get(a.batchId) ?? "").localeCompare(startTimes.get(b.batchId) ?? ""));
+    const rosterWithChanges = await applyRosterChanges({
+      courseId: selectedCourse.id,
+      date: parseDateOnly(selectedDate),
+      groups: Array.from(groupMap.values()),
+      markedIds,
+      labelFor: (b) => `${formatTimeLabel(b.startTime)} - ${formatTimeLabel(b.endTime)} · ${b.teacher ? b.teacher.name : "Unassigned"}`,
+    });
+    batchGroups = rosterWithChanges.groups;
+    notComing = rosterWithChanges.notComing;
 
     const groupedIds = new Set(batchGroups.flatMap((g) => g.students.map((s) => s.id)));
     otherStudents = existingAttendance

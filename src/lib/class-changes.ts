@@ -1,7 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/attendance";
-import { dayCodeFromDate } from "@/lib/schedule";
+import { dayCodeFromDate, formatTimeLabel } from "@/lib/schedule";
+import { format } from "date-fns";
 import { istDateString } from "@/lib/whatsapp-notices";
 import { COMP_WORKING_DAYS, addWorkingDays, changeOutcome, dateKey, isWorkingDay, makeUpDeadline, seatLimit, slotOptions, type SlotOption } from "@/lib/reschedule";
 
@@ -187,4 +188,52 @@ export async function loadTracked(where: Prisma.ClassChangeWhereInput, now = new
       !!c.toDate && attended.has(`${c.studentId}|${c.courseId}|${dateKey(c.toDate)}`)
     ),
   }));
+}
+
+export type RosterStudentRow = { id: string; name: string; marked: boolean; tag?: string };
+export type RosterGroup = { batchId: string; label: string; startTime: string; students: RosterStudentRow[] };
+
+// Puts the day's booked class changes onto an attendance roster, for the
+// admin/front desk page and for a teacher's page alike: students who skipped
+// or moved away are taken off (unless already marked present) and listed as
+// not expected; students making a class up join the roster of the slot they
+// are coming to, tagged "make-up". `teacherId` limits it to that teacher's
+// classes.
+export async function applyRosterChanges(input: {
+  courseId: string;
+  date: Date;
+  groups: RosterGroup[];
+  markedIds: Set<string>;
+  teacherId?: string;
+  labelFor: (b: { startTime: string; endTime: string; teacher: { name: string } | null }) => string;
+}): Promise<{ groups: RosterGroup[]; notComing: { id: string; name: string; detail: string }[] }> {
+  const { courseId, date, markedIds } = input;
+  const mine = input.teacherId ? { teacherId: input.teacherId } : {};
+  const [away, coming] = await Promise.all([
+    prisma.classChange.findMany({
+      where: { status: "BOOKED", courseId, fromDate: date, student: { status: "ACTIVE" }, fromBatch: mine },
+      include: { student: true, toBatch: true },
+    }),
+    prisma.classChange.findMany({
+      where: { status: "BOOKED", kind: "MOVE", courseId, toDate: date, student: { status: "ACTIVE" }, toBatch: mine },
+      include: { student: true, toBatch: { include: { teacher: true } } },
+    }),
+  ]);
+
+  const awayKeys = new Set(away.map((c) => `${c.fromBatchId}|${c.studentId}`));
+  const groups = new Map(input.groups.map((g) => [g.batchId, { ...g, students: g.students.filter((s) => !awayKeys.has(`${g.batchId}|${s.id}`) || s.marked) }]));
+  for (const c of coming) {
+    const b = c.toBatch!;
+    if (!groups.has(b.id)) groups.set(b.id, { batchId: b.id, label: input.labelFor(b), startTime: b.startTime, students: [] });
+    groups.get(b.id)!.students.push({ id: c.studentId, name: c.student.name, marked: markedIds.has(c.studentId), tag: "make-up" });
+  }
+
+  return {
+    groups: Array.from(groups.values()).filter((g) => g.students.length > 0).sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    notComing: away.map((c) => ({
+      id: c.studentId,
+      name: c.student.name,
+      detail: c.toBatch && c.toDate ? `moved to ${format(c.toDate, "EEE")} ${formatTimeLabel(c.toBatch.startTime)}` : "skipping",
+    })),
+  };
 }

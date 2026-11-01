@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/authz";
 import { markStudentPresentAsTeacher, unmarkStudentAsTeacher } from "@/lib/actions/teacher-actions";
 import { Card, CardBody, CardHeader, PageHeader, Button, Select, EmptyState } from "@/components/ui";
 import { AttendanceRoster } from "@/components/attendance-roster";
+import { applyRosterChanges, type RosterGroup } from "@/lib/class-changes";
 import { DAY_LABELS, dayCodeFromDate, formatTimeLabel } from "@/lib/schedule";
 import { format } from "date-fns";
 
@@ -35,10 +36,11 @@ export default async function TeacherAttendancePage({
 
   const selectedCourse = courseId ? myCourses.find((c) => c.id === courseId) : null;
 
-  type RosterStudent = { id: string; name: string; marked: boolean };
+  type RosterStudent = { id: string; name: string; marked: boolean; tag?: string };
   let batchGroups: { batchId: string; label: string; students: RosterStudent[] }[] = [];
   let otherStudents: RosterStudent[] = [];
   let addableStudents: { id: string; name: string; studentCode: string }[] = [];
+  let notComing: { id: string; name: string; detail: string }[] = [];
 
   if (selectedCourse) {
     const selectedDayCode = dayCodeFromDate(parseDateOnly(selectedDate));
@@ -71,19 +73,31 @@ export default async function TeacherAttendancePage({
     // Group the roster by batch — a teacher can run several time slots on
     // the same day, and marking 30+ students needs to show which batch
     // each one belongs to, not one flat alphabetical list.
-    const groupMap = new Map<string, { batchId: string; label: string; students: RosterStudent[] }>();
+    const groupMap = new Map<string, RosterGroup>();
     for (const e of enrollments) {
       const b = e.batch;
       if (!groupMap.has(b.id)) {
         groupMap.set(b.id, {
           batchId: b.id,
           label: `${formatTimeLabel(b.startTime)} - ${formatTimeLabel(b.endTime)}`,
+          startTime: b.startTime,
           students: [],
         });
       }
       groupMap.get(b.id)!.students.push({ id: e.studentId, name: e.student.name, marked: markedIds.has(e.studentId) });
     }
-    batchGroups = Array.from(groupMap.values());
+    // Skips and make-ups booked for this day: who is not expected, and who is
+    // coming to one of this teacher's classes for a make-up.
+    const rosterWithChanges = await applyRosterChanges({
+      courseId: selectedCourse.id,
+      date: parseDateOnly(selectedDate),
+      groups: Array.from(groupMap.values()),
+      markedIds,
+      teacherId: user.id,
+      labelFor: (b) => `${formatTimeLabel(b.startTime)} - ${formatTimeLabel(b.endTime)}`,
+    });
+    batchGroups = rosterWithChanges.groups;
+    notComing = rosterWithChanges.notComing;
 
     const groupedIds = new Set(batchGroups.flatMap((g) => g.students.map((s) => s.id)));
     otherStudents = existingAttendance
@@ -158,6 +172,7 @@ export default async function TeacherAttendancePage({
                   totalCount={totalRosterCount}
                   markAction={markStudentPresentAsTeacher}
                   unmarkAction={unmarkStudentAsTeacher}
+                  notComing={notComing}
                 />
               </CardBody>
             </Card>
