@@ -101,6 +101,11 @@ model User {
 
   // Parent relations
   studentLinks StudentGuardian[]
+
+  // Money: expenses this person entered, and (for a teacher) their pay and slips
+  expensesCreated Expense[]   @relation("ExpensesCreated")
+  teacherPay      TeacherPay?
+  payslips        Payslip[]   @relation("TeacherPayslips")
 }
 
 model Lead {
@@ -552,4 +557,103 @@ model WhatsAppSettings {
   buttonReminders Boolean  @default(false)
   changedAt       DateTime @default(now())
   changedBy       String? // name of the admin who last paused or resumed
+}
+
+// ---- Expenses, payroll and the monthly P&L ---------------------------------
+
+enum ExpenseSource {
+  PETTY_CASH // entered by front desk
+  ADMIN // entered by the admin
+  PAYROLL // created automatically when a payslip is finalised
+}
+
+enum PayslipStatus {
+  DRAFT
+  FINAL
+}
+
+enum PayslipLineKind {
+  EARNING
+  DEDUCTION
+}
+
+// A heading expenses are filed under. Front desk may only use the ones marked
+// pettyCash; the rest (rent, salaries, ...) are the admin's.
+model ExpenseCategory {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  pettyCash Boolean   @default(false)
+  active    Boolean   @default(true)
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  expenses  Expense[]
+}
+
+// One amount the academy spent, on one date (cash basis: when it was paid).
+model Expense {
+  id          String          @id @default(cuid())
+  date        DateTime // date-only
+  amount      Float
+  categoryId  String
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id])
+  description String
+  payee       String? // shop, vendor or person paid
+  method      PaymentMethod   @default(CASH)
+  reference   String? // bill / transaction number
+  source      ExpenseSource   @default(ADMIN)
+  createdById String?
+  createdBy   User?           @relation("ExpensesCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  payslipId   String?         @unique
+  payslip     Payslip?        @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([date])
+  @@index([categoryId])
+}
+
+// A teacher's fixed monthly pay, plus the details printed on their slip.
+model TeacherPay {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monthlySalary Float
+  designation   String?
+  pan           String?
+  bankAccount   String?
+  joinedOn      DateTime?
+  updatedAt     DateTime  @updatedAt
+}
+
+// One teacher's slip for one month. The basic is copied from their pay when the
+// slip is created, so a later raise never rewrites an old slip.
+model Payslip {
+  id            String        @id @default(cuid())
+  teacherId     String
+  teacher       User          @relation("TeacherPayslips", fields: [teacherId], references: [id], onDelete: Cascade)
+  year          Int
+  month         Int // 1-12
+  monthlySalary Float
+  netPay        Float
+  status        PayslipStatus @default(DRAFT)
+  paidOn        DateTime?
+  note          String?
+  generatedById String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  finalisedAt   DateTime?
+  lines         PayslipLine[]
+  expense       Expense?
+
+  @@unique([teacherId, year, month])
+}
+
+model PayslipLine {
+  id        String          @id @default(cuid())
+  payslipId String
+  payslip   Payslip         @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+  label     String
+  amount    Float
+  kind      PayslipLineKind
+  createdAt DateTime        @default(now())
 }
