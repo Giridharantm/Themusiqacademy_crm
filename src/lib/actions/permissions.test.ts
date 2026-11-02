@@ -15,6 +15,8 @@ const ADMIN_ONLY: Record<string, string[]> = {
   "course-actions.ts": ["createCourse", "updateCourseRules", "deleteCourse"],
   "user-actions.ts": ["createTeacher", "updateTeacher", "updateTeacherStatus", "deleteTeacher", "reassignBatch", "reassignAllBatches"],
   "user-admin-actions.ts": ["createFrontDesk", "updateUserDetails", "setUserPassword", "resetLearnerPasswordToPhone", "setUserStatus", "deleteUser"],
+  "expense-actions.ts": ["createExpenseCategory", "updateExpenseCategory"],
+  "payroll-actions.ts": ["setTeacherPay", "createPayslip", "updatePayslipDetails", "addPayslipLine", "removePayslipLine", "finalisePayslip", "reopenPayslip", "deletePayslip"],
   "whatsapp-actions.ts": ["sendNotice", "setPhoneConsent", "setRemindersPausedAction", "setReminderButtonsAction","toggleReminderSkip", "setStudentRemindersOff"],
 };
 
@@ -23,6 +25,7 @@ const FRONT_DESK_OK: Record<string, string[]> = {
   "student-actions.ts": ["createStudent", "updateStudentStatus", "addGuardian", "removeGuardian", "enrollInBatch", "updateEnrollmentBatch", "updateEnrollmentStatus", "addStudentFollowUp", "markStudentFollowUpDone"],
   "subscription-actions.ts": ["createOrRenewSubscription"],
   "class-change-actions.ts": ["bookClassChange", "cancelClassChange"],
+  "expense-actions.ts": ["createExpense", "updateExpense", "deleteExpense"],
   "attendance-actions.ts": ["markStudentPresentAsAdmin", "unmarkStudentAsAdmin", "markAttendanceOnDateAsAdmin", "removeAttendanceOnDateAsAdmin"],
   "billing-actions.ts": ["recordStudentPayment", "raiseInvoiceFromPayments", "recordPayment"],
   "whatsapp-actions.ts": ["sendInboxReply", "markInboxRead", "markNumberAsSpam", "unblockNumberAction"],

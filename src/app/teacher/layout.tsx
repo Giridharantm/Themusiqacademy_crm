@@ -5,6 +5,7 @@ import { currentUser } from "@/lib/authz";
 const links = [
   { href: "/teacher", label: "My Batches" },
   { href: "/teacher/attendance", label: "Attendance" },
+  { href: "/teacher/payslips", label: "Payslips" },
 ];
 
 export default async function TeacherLayout({ children }: { children: ReactNode }) {

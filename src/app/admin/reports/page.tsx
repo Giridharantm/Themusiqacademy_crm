@@ -5,6 +5,7 @@ const reports = [
   { href: "/admin/reports/students", title: "Students", description: "Every student's details, enrollments and status — filter by instrument, status, gender and join date." },
   { href: "/admin/reports/leads", title: "Leads", description: "Enquiries by status, source and instrument, with follow-up and conversion history." },
   { href: "/admin/reports/attendance", title: "Attendance", description: "Attendance records by instrument and date range, one row per student per class." },
+  { href: "/admin/reports/pnl", title: "Profit & loss", description: "Each month's income (GST taken out), expenses by heading and what was left, with the last six months side by side." },
   { href: "/admin/reports/invoices", title: "Invoices & tax", description: "Invoices with the GST breakdown (amount without GST, CGST, SGST) needed to file monthly tax — defaults to the current month." },
 ];
 
