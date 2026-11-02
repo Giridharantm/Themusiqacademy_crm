@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/authz";
 import { parseDateOnly } from "@/lib/attendance";
 import { istDateString } from "@/lib/whatsapp-notices";
-import { canChangeExpense, canUseCategory, validateExpense, type ExpenseRole } from "@/lib/expenses";
+import { canChangeExpense, canUseCategory, monthKey, validateExpense, type ExpenseRole } from "@/lib/expenses";
 
 const METHODS = ["CASH", "UPI", "CARD", "BANK_TRANSFER", "OTHER"] as const;
 type Method = (typeof METHODS)[number];
@@ -99,7 +99,7 @@ export async function deleteExpense(id: string) {
   const { expense } = await loadChangeable(id);
   await prisma.expense.delete({ where: { id } });
   refresh();
-  redirect(back({ month: expense.date.toISOString().slice(0, 7), saved: "1" }));
+  redirect(back({ month: monthKey(expense.date.getFullYear(), expense.date.getMonth() + 1), saved: "1" }));
 }
 
 // ---- headings (admin) -------------------------------------------------------

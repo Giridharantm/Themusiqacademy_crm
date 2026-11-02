@@ -9,6 +9,7 @@ import { slipTotals } from "@/lib/payroll";
 import { money } from "@/lib/invoice";
 import { Card, CardBody, CardHeader, PageHeader, Badge, Button, Input, Select, Textarea } from "@/components/ui";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { format } from "date-fns";
 
 export default async function PayslipEditorPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   await requireRole("ADMIN");
@@ -118,7 +119,7 @@ export default async function PayslipEditorPage({ params, searchParams }: { para
                 <CardHeader title="Finalise and pay" subtitle="The teacher can then download the slip, and the net pay is added to expenses as Salaries" />
                 <CardBody>
                   <form action={finalisePayslip.bind(null, id)} className="space-y-3">
-                    <Input label="Date paid" name="paidOn" type="date" required defaultValue={slip.paidOn ? slip.paidOn.toISOString().slice(0, 10) : istDateString(new Date())} />
+                    <Input label="Date paid" name="paidOn" type="date" required defaultValue={slip.paidOn ? format(slip.paidOn, "yyyy-MM-dd") : istDateString(new Date())} />
                     <Select label="Paid by" name="method" defaultValue="BANK_TRANSFER">
                       <option value="BANK_TRANSFER">Bank transfer</option>
                       <option value="UPI">UPI</option>
@@ -142,7 +143,7 @@ export default async function PayslipEditorPage({ params, searchParams }: { para
               <CardHeader title="Paid" />
               <CardBody className="space-y-3 text-sm">
                 <p>
-                  ₹ {money(slip.netPay)} paid {slip.paidOn ? `on ${slip.paidOn.toISOString().slice(0, 10)}` : ""}. It is counted under Salaries in that month&apos;s expenses.
+                  ₹ {money(slip.netPay)} paid {slip.paidOn ? `on ${format(slip.paidOn, "d MMM yyyy")}` : ""}. It is counted under Salaries in that month&apos;s expenses.
                 </p>
                 <Link href={`/admin/payroll/${id}/slip`} className="inline-block text-indigo-600 hover:underline">
                   Open the printable slip

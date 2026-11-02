@@ -83,7 +83,7 @@ export default async function ProfitAndLossPage({ searchParams }: { searchParams
         </Card>
 
         <Card>
-          <CardHeader title="Last six months" subtitle="Income, expenses and what was left" />
+          <CardHeader title="Last six months" subtitle="Expenses only count from when you started recording them, so earlier months look better than they were" />
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
