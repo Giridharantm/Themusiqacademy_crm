@@ -125,7 +125,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
                           <summary className="text-xs text-indigo-600 hover:underline cursor-pointer list-none">Edit or delete</summary>
                           <form action={updateExpense.bind(null, e.id)} className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
                             <Input label="Date" name="date" type="date" required defaultValue={format(e.date, "yyyy-MM-dd")} max={today} />
-                            <Input label="Amount (₹)" name="amount" type="number" min="0.01" step="0.01" required defaultValue={e.amount} />
+                            <Input label="Total paid (₹)" name="amount" type="number" min="0.01" step="0.01" required defaultValue={e.amount} hint="Everything paid, GST included" />
                             <Select label="Heading" name="categoryId" defaultValue={e.categoryId}>
                               {(usable.some((c) => c.id === e.categoryId) ? usable : [e.category, ...usable]).map((c) => (
                                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -210,7 +210,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
           <CardBody>
             <form action={createExpense} className="space-y-3">
               <Input label="Date paid" name="date" type="date" required defaultValue={today} max={today} />
-              <Input label="Amount (₹)" name="amount" type="number" min="0.01" step="0.01" required placeholder="0.00" />
+              <Input label="Total paid (₹)" name="amount" type="number" min="0.01" step="0.01" required placeholder="0.00" hint="Everything you paid, including any GST. No split needed." />
               <Select label="Heading" name="categoryId" required defaultValue="">
                 <option value="" disabled>Choose a heading</option>
                 {usable.map((c) => (
