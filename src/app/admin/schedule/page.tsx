@@ -181,7 +181,7 @@ export default async function DaySchedulePage({ searchParams }: { searchParams: 
               </ul>
             </Card>
           ))}
-          <p className="text-xs text-slate-400">✓ = marked present. Amber = here for a make-up class. Green = confirmed on the WhatsApp reminder, red = said they can't come, grey = no reply yet.</p>
+          <p className="text-xs text-slate-400">✓ = marked present. Amber = here for a make-up class. Green = confirmed on the WhatsApp reminder, red = said they can&apos;t come, grey = no reply yet.</p>
         </div>
       )}
     </div>
