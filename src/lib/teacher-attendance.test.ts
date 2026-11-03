@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clockLabel, isClockTime, monthBounds, parseEntry, summarise } from "./teacher-attendance";
+import { clockLabel, daysOfMonth, isClockTime, monthBounds, parseEntry, summarise } from "./teacher-attendance";
 
 const TODAY = "2026-11-03";
 const input = (over: Partial<Parameters<typeof parseEntry>[0]> = {}) => ({ date: TODAY, status: "PRESENT", time: "10:30", note: "", ...over });
@@ -67,6 +67,21 @@ describe("summarise", () => {
   it("counts present and absent days", () => {
     expect(summarise([{ status: "PRESENT" }, { status: "PRESENT" }, { status: "ABSENT" }])).toEqual({ present: 2, absent: 1, marked: 3 });
     expect(summarise([])).toEqual({ present: 0, absent: 0, marked: 0 });
+  });
+});
+
+describe("daysOfMonth", () => {
+  it("lists every day, including a leap February", () => {
+    const nov = daysOfMonth("2026-11");
+    expect(nov).toHaveLength(30);
+    expect(nov[0]).toBe("2026-11-01");
+    expect(nov[29]).toBe("2026-11-30");
+    expect(daysOfMonth("2028-02")).toHaveLength(29);
+    expect(daysOfMonth("2026-02")).toHaveLength(28);
+  });
+
+  it("is empty for a bad month", () => {
+    expect(daysOfMonth("2026-13")).toEqual([]);
   });
 });
 

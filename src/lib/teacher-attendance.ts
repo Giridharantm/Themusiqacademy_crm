@@ -52,6 +52,13 @@ export function summarise(entries: { status: TeacherAttendanceStatus }[]) {
   return { present, absent: entries.length - present, marked: entries.length };
 }
 
+// Every day of a "yyyy-mm" month as yyyy-mm-dd; empty when it isn't one.
+export function daysOfMonth(month: string): string[] {
+  if (!monthBounds(month)) return [];
+  const [y, m] = month.split("-").map(Number);
+  return Array.from({ length: new Date(y, m, 0).getDate() }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`);
+}
+
 // First day of the month and of the next, as yyyy-mm-dd, for a "yyyy-mm" value;
 // null when it isn't one.
 export function monthBounds(month: string): { from: string; to: string } | null {

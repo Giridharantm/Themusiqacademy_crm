@@ -57,10 +57,13 @@ export default async function TeacherAttendancePage({
             {key < todayKey && <Link href={link(addDaysTo(date, 1))} className="text-indigo-600 hover:underline">Next day →</Link>}
             {key !== todayKey && <Link href={link(today)} className="text-slate-500 hover:underline">Today</Link>}
           </div>
-          <form method="get" className="flex items-end gap-2">
-            <input type="date" name="date" defaultValue={key} max={todayKey} className={fieldClass} />
-            <Button type="submit" variant="secondary">Show</Button>
-          </form>
+          <div className="flex items-end gap-3">
+            <form method="get" className="flex items-end gap-2">
+              <input type="date" name="date" defaultValue={key} max={todayKey} className={fieldClass} />
+              <Button type="submit" variant="secondary">Show</Button>
+            </form>
+            <Link href={`/admin/teacher-attendance/month?month=${key.slice(0, 7)}`} className="text-sm text-indigo-600 hover:underline py-2">Monthly view →</Link>
+          </div>
         </CardBody>
       </Card>
 
