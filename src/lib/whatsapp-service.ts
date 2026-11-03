@@ -247,16 +247,35 @@ export async function setRemindersPaused(paused: boolean, changedBy: string) {
   });
 }
 
-export async function getReminderButtons(): Promise<boolean> {
-  return (await prisma.whatsAppSettings.findUnique({ where: { id: "main" } }))?.buttonReminders ?? false;
+// How the daily reminder is sent: no buttons, Yes / No, or Yes / Reschedule / Can't attend.
+export type ReminderStyle = "PLAIN" | "YES_NO" | "THREE";
+
+export async function getReminderStyle(): Promise<ReminderStyle> {
+  const row = await prisma.whatsAppSettings.findUnique({ where: { id: "main" } });
+  if (!row?.buttonReminders) return "PLAIN";
+  return row.threeButtons ? "THREE" : "YES_NO";
 }
 
-export async function setReminderButtons(on: boolean, changedBy: string) {
+// Whether reminders carry buttons at all (a comp class message follows this too).
+export async function getReminderButtons(): Promise<boolean> {
+  return (await getReminderStyle()) !== "PLAIN";
+}
+
+export async function setReminderStyle(style: ReminderStyle, changedBy: string) {
+  const data = { buttonReminders: style !== "PLAIN", threeButtons: style === "THREE" };
   await prisma.whatsAppSettings.upsert({
     where: { id: "main" },
-    create: { id: "main", buttonReminders: on, changedBy },
-    update: { buttonReminders: on },
+    create: { id: "main", ...data, changedBy },
+    update: data,
   });
+}
+
+export async function getAutoSkipNo(): Promise<boolean> {
+  return (await prisma.whatsAppSettings.findUnique({ where: { id: "main" } }))?.autoSkipNo ?? true;
+}
+
+export async function setAutoSkipNo(on: boolean) {
+  await prisma.whatsAppSettings.upsert({ where: { id: "main" }, create: { id: "main", autoSkipNo: on }, update: { autoSkipNo: on } });
 }
 
 export type ReminderSchedule = { time: string; lastAutoRunDate: string | null; lastRunAt: Date | null; lastRunSummary: string | null };
@@ -376,10 +395,13 @@ export async function planReminders(dateStr: string): Promise<ReminderPlan> {
   return { dateStr, isClassDay: true, rows, classes: batches.length, noticeBatches: noticeBatches.size };
 }
 
-// What the reminder's two buttons send back: which student's class, and when.
-export function reminderButtonPayloads(row: { studentId: string; batchId: string }, dateStr: string): string[] {
+// What the reminder's buttons send back: which student's class, and when.
+// Two buttons are Yes / No; three are Yes / Reschedule / Can't attend, and the
+// last two answer the follow-up question up front ("move" lists make-up slots,
+// "cancel" books the skip), so a family never has to answer twice.
+export function reminderButtonPayloads(row: { studentId: string; batchId: string }, dateStr: string, three = false): string[] {
   const base = { studentId: row.studentId, batchId: row.batchId, date: dateStr };
-  return [replyId({ kind: "yes", ...base }), replyId({ kind: "no", ...base })];
+  return three ? [replyId({ kind: "yes", ...base }), replyId({ kind: "move", ...base }), replyId({ kind: "cancel", ...base })] : [replyId({ kind: "yes", ...base }), replyId({ kind: "no", ...base })];
 }
 
 // What a comp class message's two buttons send back (the regular batch it makes up for, and today).
@@ -404,7 +426,8 @@ export async function runClassReminders(now = new Date(), opts: { ignorePause?: 
   const plan = await planReminders(dateStr);
   if (!plan.isClassDay) return { ran: false, reason: "No classes today (Monday holiday)" };
 
-  const buttons = await getReminderButtons();
+  const style = await getReminderStyle();
+  const buttons = style !== "PLAIN";
   const tally = emptyTally();
   let excluded = 0;
   for (const row of plan.rows) {
@@ -416,7 +439,7 @@ export async function runClassReminders(now = new Date(), opts: { ignorePause?: 
       phone: row.phone,
       studentId: row.studentId,
       // No buttons on a make-up reminder: "can't attend" there has no regular class to cancel.
-      ...reminderMessage(row, row.progress, buttons && !row.makeUp ? reminderButtonPayloads(row, dateStr) : undefined),
+      ...reminderMessage(row, row.progress, buttons && !row.makeUp ? reminderButtonPayloads(row, dateStr, style === "THREE") : undefined, style === "THREE"),
       summary: `${row.courseName} ${clockLabel(row.startTime)} · ${row.studentName}`,
       dedupeKey: row.key,
     });

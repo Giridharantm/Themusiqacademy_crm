@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/authz";
 import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/attendance";
-import { blockNumber, createAndSendNotice, markConversationRead, sendConversationReply, sendRemindersNow, setConsent, setReminderButtons, setReminderTime, setRemindersPaused, unblockNumber } from "@/lib/whatsapp-service";
+import { blockNumber, createAndSendNotice, markConversationRead, sendConversationReply, sendRemindersNow, setAutoSkipNo, setConsent, setReminderStyle, setReminderTime, setRemindersPaused, unblockNumber, type ReminderStyle } from "@/lib/whatsapp-service";
 import { isNoticeType, isReminderTime, normalizePhone } from "@/lib/whatsapp-notices";
 
 // Sends an ad hoc notice to the opted-in families of the chosen classes. The
@@ -114,11 +114,19 @@ export async function sendRemindersNowAction() {
   redirect(`/admin/whatsapp/reminders?${q.toString()}`);
 }
 
-// Switches the "Yes, I'll attend" / "No, can't attend" buttons on the daily reminder on
-// or off. Only turn them on once Meta has approved the two button templates.
-export async function setReminderButtonsAction(on: boolean) {
+// Chooses how the daily reminder is sent: plain, with Yes / No buttons, or with Yes /
+// Reschedule / Can't attend. Only choose a button style once Meta has approved its templates.
+export async function setReminderStyleAction(style: ReminderStyle) {
   const user = await requireRole("ADMIN");
-  await setReminderButtons(on, user.name ?? "an admin");
+  if (style !== "PLAIN" && style !== "YES_NO" && style !== "THREE") throw new Error("Unknown reminder style");
+  await setReminderStyle(style, user.name ?? "an admin");
+  revalidatePath("/admin/whatsapp/reminders");
+}
+
+// Whether a No that was never followed up is marked as a missed class once the class starts.
+export async function setAutoSkipNoAction(on: boolean) {
+  await requireRole("ADMIN");
+  await setAutoSkipNo(on);
   revalidatePath("/admin/whatsapp/reminders");
 }
 

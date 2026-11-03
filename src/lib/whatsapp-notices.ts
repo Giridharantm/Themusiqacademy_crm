@@ -13,6 +13,10 @@ export const TEMPLATE_REMINDER_PROGRESS = "class_reminder_progress"; // same, pl
 export const TEMPLATE_REMINDER_BUTTONS = "class_reminder_buttons";
 export const TEMPLATE_REMINDER_PROGRESS_BUTTONS = "class_reminder_progress_buttons";
 export const REMINDER_BUTTON_LABELS = ["Yes, I'll attend", "No, can't attend"] as const;
+// The same reminders with three outcome buttons instead of Yes / No, so nobody has to answer a second question.
+export const TEMPLATE_REMINDER_OPTIONS = "class_reminder_options";
+export const TEMPLATE_REMINDER_PROGRESS_OPTIONS = "class_reminder_progress_options";
+export const REMINDER_OPTION_LABELS = ["Yes, I'll attend", "Reschedule", "Can't attend"] as const;
 export const TEMPLATE_RESCHEDULED = "class_rescheduled"; // {{1}} student, {{2}} instrument, {{3}} old slot, {{4}} new slot
 export const TEMPLATE_NOTICE = "class_notice"; // {{1}} student, {{2}} instrument, {{3}} date, {{4}} message
 
@@ -177,6 +181,9 @@ export const TEMPLATE_BODIES: Record<string, string> = {
   [TEMPLATE_REMINDER_BUTTONS]: "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. Will you be able to attend?",
   [TEMPLATE_REMINDER_PROGRESS_BUTTONS]:
     "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. Classes completed so far: {{4}} of {{5}}. Will you be able to attend?",
+  [TEMPLATE_REMINDER_OPTIONS]: "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. Will you be able to attend?",
+  [TEMPLATE_REMINDER_PROGRESS_OPTIONS]:
+    "Hello! A reminder from The Musiq Academy: {{1}}'s {{2}} class is today at {{3}}. Classes completed so far: {{4}} of {{5}}. Will you be able to attend?",
   [TEMPLATE_RESCHEDULED]:
     "Hello! An update from The Musiq Academy: {{1}}'s {{2}} class on {{3}} has been rescheduled to {{4}}. Please reply here if this time doesn't work.",
   [TEMPLATE_NOTICE]:
@@ -195,14 +202,21 @@ export type ClassProgress = { used: number; total: number };
 export function reminderMessage(
   r: { studentName: string; courseName: string; startTime: string },
   progress: ClassProgress | null,
-  // When set, the template with buttons is used and these are the ids the two
-  // buttons ("Yes, I'll attend", "No, can't attend") send back.
-  buttonPayloads?: string[]
+  // When set, the template with buttons is used and these are the ids the
+  // buttons send back: two ("Yes, I'll attend", "No, can't attend"), or three
+  // ("Yes, I'll attend", "Reschedule", "Can't attend") with `threeButtons`.
+  buttonPayloads?: string[],
+  threeButtons = false
 ): { template: string; params: string[]; buttonPayloads?: string[] } {
   const base = [r.studentName, r.courseName, clockLabel(r.startTime)];
   const withProgress = !!progress && progress.total > 0;
   const params = withProgress ? [...base, String(Math.max(0, progress.used)), String(progress.total)] : base;
-  if (buttonPayloads) return { template: withProgress ? TEMPLATE_REMINDER_PROGRESS_BUTTONS : TEMPLATE_REMINDER_BUTTONS, params, buttonPayloads };
+  if (buttonPayloads) {
+    const template = threeButtons
+      ? withProgress ? TEMPLATE_REMINDER_PROGRESS_OPTIONS : TEMPLATE_REMINDER_OPTIONS
+      : withProgress ? TEMPLATE_REMINDER_PROGRESS_BUTTONS : TEMPLATE_REMINDER_BUTTONS;
+    return { template, params, buttonPayloads };
+  }
   return { template: withProgress ? TEMPLATE_REMINDER_PROGRESS : TEMPLATE_REMINDER, params };
 }
 

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { parseDateOnly } from "@/lib/attendance";
-import { sendRemindersNowAction, setReminderButtonsAction, setReminderTimeAction, setRemindersPausedAction, setStudentRemindersOff, toggleReminderSkip } from "@/lib/actions/whatsapp-actions";
-import { compClassesSent, getReminderButtons, getReminderSchedule, getRemindersPaused, planReminders } from "@/lib/whatsapp-service";
-import { REPLY_STATUS_LABELS, replyCounts, type ReplyStatus } from "@/lib/class-confirm";
+import { sendRemindersNowAction, setAutoSkipNoAction, setReminderStyleAction, setReminderTimeAction, setRemindersPausedAction, setStudentRemindersOff, toggleReminderSkip } from "@/lib/actions/whatsapp-actions";
+import { compClassesSent, getAutoSkipNo, getReminderSchedule, getReminderStyle, getRemindersPaused, planReminders } from "@/lib/whatsapp-service";
+import { REGULAR_REPLY_LABELS, REPLY_STATUS_LABELS, replyCounts, type ReplyStatus } from "@/lib/class-confirm";
 import {
   DECISION_LABELS,
   REMINDER_TIME_OPTIONS,
@@ -48,7 +48,7 @@ export default async function RemindersPage({
   const date = parseDateOnly(dateStr);
   const isPast = dateStr < today;
 
-  const [plan, pause, buttons, todayPlan, comps] = await Promise.all([planReminders(dateStr), getRemindersPaused(), getReminderButtons(), planReminders(today), compClassesSent(dateStr)]);
+  const [plan, pause, style, autoSkip, todayPlan, comps] = await Promise.all([planReminders(dateStr), getRemindersPaused(), getReminderStyle(), getAutoSkipNo(), planReminders(today), compClassesSent(dateStr)]);
   // Today's reminders that haven't gone out yet (not sent, or a send that failed).
   const todayPending = todayPlan.rows.filter((r) => r.decision === "SEND" && r.sentStatus !== "SENT" && r.sentStatus !== "DRY_RUN").length;
   const todaySent = todayPlan.rows.filter((r) => r.sentStatus === "SENT").length;
@@ -57,7 +57,7 @@ export default async function RemindersPage({
   const rows = filterReminderRows(plan.rows, { course: sp.course, time: sp.time, status: sp.status, reply: sp.reply, q: sp.q });
   const filtering = !!(sp.course || sp.time || sp.status || sp.reply || sp.q?.trim());
   const replies = replyCounts(plan.rows.map((r) => r.replyStatus));
-  const replyOptions = (Object.keys(REPLY_STATUS_LABELS) as ReplyStatus[]).filter((s) => replies[s] > 0).map((s) => ({ value: s, label: REPLY_STATUS_LABELS[s] }));
+  const replyOptions = (Object.keys(REGULAR_REPLY_LABELS) as ReplyStatus[]).filter((s) => replies[s] > 0).map((s) => ({ value: s, label: REGULAR_REPLY_LABELS[s] }));
   const courseOptions = Array.from(new Set(plan.rows.map((r) => r.courseName)))
     .sort()
     .map((c) => ({ value: c, label: c }));
@@ -180,24 +180,62 @@ export default async function RemindersPage({
       </Card>
 
       <Card className="mb-6">
+        <CardBody className="space-y-3">
+          <div className="max-w-3xl">
+            <p className="text-sm font-medium text-slate-900">Reminder buttons</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {style === "PLAIN" &&
+                "Reminders go without buttons. Choose a button style only after Meta has approved its templates, or those sends would fail."}
+              {style === "YES_NO" &&
+                "Each reminder asks “Will you be able to attend?” with “Yes, I'll attend” and “No, can't attend”. A No then asks whether to reschedule or cancel the class, which families sometimes leave unanswered."}
+              {style === "THREE" &&
+                "Each reminder asks “Will you be able to attend?” with “Yes, I'll attend”, “Reschedule” and “Can't attend”. Reschedule sends a list of free make-up slots (same day, or within 5 working days for Drums, Keyboard and Guitar); Can't attend records the skip straight away."}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { value: "PLAIN", label: "No buttons", needs: "" },
+                { value: "YES_NO", label: "Yes / No", needs: "class_reminder_buttons and class_reminder_progress_buttons" },
+                { value: "THREE", label: "Yes / Reschedule / Can't attend", needs: "class_reminder_options and class_reminder_progress_options" },
+              ] as const
+            ).map((o) => (
+              <form key={o.value} action={setReminderStyleAction.bind(null, o.value)}>
+                {style === o.value ? (
+                  <span className="inline-flex items-center rounded-md bg-indigo-50 border border-indigo-200 px-3 py-2 text-sm font-medium text-indigo-700">{o.label} ✓</span>
+                ) : (
+                  <ConfirmSubmitButton
+                    variant="secondary"
+                    confirmMessage={o.needs ? `Switch to ${o.label}? The templates ${o.needs} must already be approved in WhatsApp Manager, or reminders will fail to send.` : "Send reminders without buttons?"}
+                  >
+                    {o.label}
+                  </ConfirmSubmitButton>
+                )}
+              </form>
+            ))}
+          </div>
+        </CardBody>
+      </Card>
+
+      <Card className="mb-6">
         <CardBody className="flex flex-wrap items-center justify-between gap-4">
           <div className="max-w-2xl">
             <p className="text-sm font-medium text-slate-900">
-              Reminder buttons are{" "}
-              <span className={buttons ? "text-emerald-700" : "text-slate-500"}>{buttons ? "ON" : "OFF"}</span>
+              Auto-skip for unanswered No is{" "}
+              <span className={autoSkip ? "text-emerald-700" : "text-slate-500"}>{autoSkip ? "ON" : "OFF"}</span>
             </p>
             <p className="text-xs text-slate-500 mt-0.5">
-              {buttons
-                ? "Each reminder asks “Will you be able to attend?” with “Yes, I'll attend” and “No, can't attend”. A No asks whether to reschedule or cancel the class: Reschedule sends a list of free make-up slots to pick from (same day, or within 5 working days for Drums, Keyboard and Guitar); Cancel records the skip."
-                : "Reminders go without buttons. Turn this on only after Meta has approved the templates class_reminder_buttons and class_reminder_progress_buttons — until then those sends would fail."}
+              {autoSkip
+                ? "When a family taps No but never chooses Reschedule or Cancel, the class is marked as missed once it starts so the seat is released. They are told, and offered a Reschedule button; the make-up they are owed is unchanged. Anyone staff already booked or marked present is left alone."
+                : "A No with nothing booked stays as “Said no, nothing booked” until staff deal with it."}
             </p>
           </div>
-          <form action={setReminderButtonsAction.bind(null, !buttons)}>
+          <form action={setAutoSkipNoAction.bind(null, !autoSkip)}>
             <ConfirmSubmitButton
               variant="secondary"
-              confirmMessage={buttons ? "Send reminders without buttons again?" : "Turn buttons on? Both button templates must already be approved in WhatsApp Manager, or reminders will fail to send."}
+              confirmMessage={autoSkip ? "Stop marking unanswered No replies as missed?" : "Mark an unanswered No as a missed class once it starts, and message the family?"}
             >
-              {buttons ? "Turn buttons off" : "Turn buttons on"}
+              {autoSkip ? "Turn auto-skip off" : "Turn auto-skip on"}
             </ConfirmSubmitButton>
           </form>
         </CardBody>
@@ -269,11 +307,11 @@ export default async function RemindersPage({
                     {counts[d]} · {DECISION_LABELS[d]}
                   </Badge>
                 ))}
-              {(Object.keys(REPLY_STATUS_LABELS) as ReplyStatus[])
+              {(Object.keys(REGULAR_REPLY_LABELS) as ReplyStatus[])
                 .filter((s) => replies[s])
                 .map((s) => (
                   <Badge key={s} color={replyColor[s]}>
-                    {replies[s]} · {REPLY_STATUS_LABELS[s]}
+                    {replies[s]} · {REGULAR_REPLY_LABELS[s]}
                   </Badge>
                 ))}
             </div>
@@ -360,7 +398,7 @@ export default async function RemindersPage({
                   ) : (
                     <Badge color={decisionColor[r.decision]}>{DECISION_LABELS[r.decision]}</Badge>
                   )}
-                  {r.replyStatus && <Badge color={replyColor[r.replyStatus]}>{REPLY_STATUS_LABELS[r.replyStatus]}</Badge>}
+                  {r.replyStatus && <Badge color={replyColor[r.replyStatus]}>{REGULAR_REPLY_LABELS[r.replyStatus]}</Badge>}
                   {r.sentStatus === "FAILED" && r.error && <span className="text-xs text-red-600 max-w-[16rem] break-words">{r.error}</span>}
                   {!isPast && !r.sentStatus && !r.remindersOff && r.decision !== "CLASS_NOTICE" && (
                     <form action={toggleReminderSkip.bind(null, r.studentId, dateStr)}>

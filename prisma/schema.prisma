@@ -580,6 +580,13 @@ model WhatsAppSettings {
   // Send the reminder with "Can't attend" / "Reschedule" buttons. Off until
   // Meta has approved the two button templates.
   buttonReminders Boolean   @default(false)
+  // With buttonReminders on: use the three-button templates ("Yes, I'll attend" /
+  // "Reschedule" / "Can't attend") instead of the two-button ones. Off until Meta
+  // has approved class_reminder_options and class_reminder_progress_options.
+  threeButtons    Boolean   @default(false)
+  // A family that tapped No and never chose Reschedule or Cancel has the class
+  // marked as missed (a skip) once it starts, so the seat is released.
+  autoSkipNo      Boolean   @default(true)
   // When the daily reminders go out, India time ("HH:MM"). The server checks
   // every few minutes and sends once, the first time it is past this time.
   reminderTime    String    @default("10:00")

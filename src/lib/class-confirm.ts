@@ -11,6 +11,10 @@ export const REPLY_STATUS_LABELS: Record<ReplyStatus, string> = {
   NO_REPLY: "No reply yet",
 };
 
+// For a regular class a "No" with nothing booked means the seat is still held, so
+// staff are told that rather than just "can't come".
+export const REGULAR_REPLY_LABELS: Record<ReplyStatus, string> = { ...REPLY_STATUS_LABELS, DECLINED: "Said no, nothing booked" };
+
 // A booked skip or move says more than a bare "No" (the family went on to choose),
 // so it wins; then the latest tap; with neither, a reminder that went out is
 // waiting for a reply. Before anything was sent there is nothing to say.

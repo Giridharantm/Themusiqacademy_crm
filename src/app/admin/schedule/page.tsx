@@ -132,7 +132,7 @@ export default async function DaySchedulePage({ searchParams }: { searchParams: 
             {(confirmed > 0 || saidNo > 0 || reminded) && (
               <>
                 {" "}
-                · <span className="text-emerald-700">{confirmed} confirmed</span> · <span className="text-red-700">{saidNo} said no</span>
+                · <span className="text-emerald-700">{confirmed} confirmed</span> · <span className="text-red-700">{saidNo} said no, nothing booked</span>
                 {reminded ? ` · ${regular.length - confirmed - saidNo} no reply yet` : ""}
               </>
             )}
@@ -164,7 +164,7 @@ export default async function DaySchedulePage({ searchParams }: { searchParams: 
                               <Link href={`/admin/students/${st.id}`} className="hover:underline">{st.name}</Link>
                               {st.makeUp ? " · make-up" : ""}
                               {st.reply === "YES" && " · confirmed"}
-                              {st.reply === "NO" && " · said no"}
+                              {st.reply === "NO" && " · said no, nothing booked"}
                               {st.present ? " ✓" : ""}
                             </li>
                           ))}
@@ -181,7 +181,7 @@ export default async function DaySchedulePage({ searchParams }: { searchParams: 
               </ul>
             </Card>
           ))}
-          <p className="text-xs text-slate-400">✓ = marked present. Amber = here for a make-up class. Green = confirmed on the WhatsApp reminder, red = said they can&apos;t come, grey = no reply yet.</p>
+          <p className="text-xs text-slate-400">✓ = marked present. Amber = here for a make-up class. Green = confirmed on the WhatsApp reminder, red = said they can&apos;t come and no skip or make-up is booked yet, grey = no reply yet.</p>
         </div>
       )}
     </div>

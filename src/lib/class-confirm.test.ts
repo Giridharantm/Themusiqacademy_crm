@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { replyCounts, replyStatus } from "./class-confirm";
+import { REGULAR_REPLY_LABELS, REPLY_STATUS_LABELS, replyCounts, replyStatus } from "./class-confirm";
 import { parseReplyId, replyId } from "./class-reply";
 
 describe("replyStatus", () => {
@@ -17,6 +17,23 @@ describe("replyStatus", () => {
   it("waits for a reply once sent, and says nothing before", () => {
     expect(replyStatus({ sent: true, answer: null, change: null })).toBe("NO_REPLY");
     expect(replyStatus({ sent: false, answer: null, change: null })).toBeNull();
+  });
+});
+
+describe("what staff are told about a bare No", () => {
+  it("says nothing is booked for a regular class, but keeps 'Can't come' for a comp class", () => {
+    expect(REGULAR_REPLY_LABELS.DECLINED).toBe("Said no, nothing booked");
+    expect(REPLY_STATUS_LABELS.DECLINED).toBe("Can't come");
+    expect({ ...REGULAR_REPLY_LABELS, DECLINED: "" }).toEqual({ ...REPLY_STATUS_LABELS, DECLINED: "" });
+  });
+});
+
+describe("the three-button reminder's replies", () => {
+  it("round-trips the Reschedule and Can't attend payloads", () => {
+    for (const kind of ["move", "cancel"] as const) {
+      const r = { kind, studentId: "s1", batchId: "b1", date: "2026-11-03" };
+      expect(parseReplyId(replyId(r))).toEqual(r);
+    }
   });
 });
 

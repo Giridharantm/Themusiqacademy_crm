@@ -9,6 +9,8 @@ import {
   REPLY_BUTTON_CANCEL,
   REPLY_BUTTON_RESCHEDULE,
   attendingText,
+  autoSkipDue,
+  autoSkippedText,
   compAttendingText,
   compDeclinedText,
   callUsText,
@@ -21,8 +23,61 @@ import {
   whatNextText,
 } from "@/lib/class-reply";
 import { makeUpDeadline } from "@/lib/reschedule";
-import { recipientPhones, shortDateLabel } from "@/lib/whatsapp-notices";
-import { sendButtonsReply, sendListReply, sendReply } from "@/lib/whatsapp-service";
+import { istDateString, istMinutes, recipientPhones, shortDateLabel } from "@/lib/whatsapp-notices";
+import { getAutoSkipNo, getRemindersPaused, sendButtonsReply, sendListReply, sendReply } from "@/lib/whatsapp-service";
+
+export type AutoSkipRun = { skipped: number; reason?: string };
+
+// A family that tapped No and then never chose Reschedule or Cancel leaves the
+// seat held. Once the class has started that No is turned into a recorded skip
+// (the same one "Can't attend" makes), the family is told, and offered a
+// Reschedule button. Only within AUTO_SKIP_WINDOW_MINUTES of the start. Left alone: anyone with a booking for that class already
+// (even a cancelled one, so staff undoing it is respected) and anyone marked
+// present. Does nothing while reminders are paused or the switch is off.
+export async function autoSkipUnansweredNos(now = new Date()): Promise<AutoSkipRun> {
+  if (!(await getAutoSkipNo())) return { skipped: 0, reason: "Auto-skip is off" };
+  if ((await getRemindersPaused()).paused) return { skipped: 0, reason: "Reminders are paused" };
+
+  const dateStr = istDateString(now);
+  const date = parseDateOnly(dateStr);
+  const nos = await prisma.classConfirmation.findMany({ where: { date, kind: "REGULAR", answer: "NO", student: { status: "ACTIVE" } } });
+  if (nos.length === 0) return { skipped: 0 };
+
+  const studentIds = nos.map((n) => n.studentId);
+  const [batches, changes, present] = await Promise.all([
+    prisma.batch.findMany({ where: { id: { in: nos.map((n) => n.batchId) } }, include: { course: true } }),
+    prisma.classChange.findMany({ where: { fromDate: date, studentId: { in: studentIds } }, select: { studentId: true, fromBatchId: true } }),
+    prisma.attendance.findMany({ where: { date, status: "PRESENT", studentId: { in: studentIds } }, select: { studentId: true, courseId: true } }),
+  ]);
+  const batchOf = new Map(batches.map((b) => [b.id, b]));
+  const handled = new Set(changes.map((c) => `${c.studentId}|${c.fromBatchId}`));
+  const came = new Set(present.map((a) => `${a.studentId}|${a.courseId}`));
+
+  let skipped = 0;
+  for (const n of nos) {
+    const batch = batchOf.get(n.batchId);
+    if (!batch || !autoSkipDue(batch.startTime, istMinutes(now))) continue;
+    if (handled.has(`${n.studentId}|${n.batchId}`) || came.has(`${n.studentId}|${batch.courseId}`)) continue;
+
+    const r = await bookClassChange(
+      { studentId: n.studentId, fromBatchId: n.batchId, fromDate: dateStr, to: null, source: "whatsapp", note: "Said no on WhatsApp and didn't choose a make-up; marked as missed when the class started" },
+      now
+    );
+    if (!r.ok) continue;
+    skipped++;
+
+    const student = await prisma.student.findUnique({ where: { id: n.studentId }, select: { name: true } });
+    const missed = { date, startTime: batch.startTime };
+    const text = autoSkippedText(student?.name ?? "your child", batch.course.name, missed, batch.course.canMoveDay ? makeUpDeadline(true, date) : null);
+    const key = `autoskip:${dateStr}:${n.studentId}:${n.batchId}`;
+    if (batch.course.canMoveDay) {
+      await sendButtonsReply(n.phone, text, [{ id: replyId({ kind: "move", studentId: n.studentId, batchId: n.batchId, date: dateStr }), title: REPLY_BUTTON_RESCHEDULE }], key);
+    } else {
+      await sendReply(n.phone, text, key);
+    }
+  }
+  return { skipped };
+}
 
 // Remembers a family's Yes / No so staff can see who has confirmed. The latest tap wins.
 async function recordConfirmation(studentId: string, batchId: string, dateStr: string, kind: "REGULAR" | "COMP", answer: "YES" | "NO", phone: string) {
@@ -102,10 +157,16 @@ export async function handleClassReply(phone: string, msgId: string, id: string)
         `${msgId}:1`
       );
       return true;
+    // On the three-button reminder these two are the family's first answer, so
+    // they count as a No (staff see them as not coming) even if no slot is picked.
     case "move":
+      await recordConfirmation(student.id, batch.id, reply.date, "REGULAR", "NO", phone);
       await offerSlots(null);
       return true;
     case "cancel":
+      await recordConfirmation(student.id, batch.id, reply.date, "REGULAR", "NO", phone);
+      await skip();
+      return true;
     case "nomove":
       await skip();
       return true;

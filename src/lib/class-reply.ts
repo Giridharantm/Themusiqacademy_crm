@@ -111,6 +111,26 @@ export function compAttendingText(startTime: string | null) {
 export const compDeclinedText = (studentName: string) =>
   `Noted: ${studentName} won't be at the comp class. Thank you for letting us know. - The Musiq Academy`;
 
+// Sent when a "No" was never followed by Reschedule or Cancel and the class has begun,
+// so the family knows it was recorded and can still pick a make-up.
+export function autoSkippedText(studentName: string, courseName: string, missed: { date: Date; startTime: string }, makeUpUntil: Date | null) {
+  const base = `Since ${studentName} couldn't attend, we've marked the ${courseName} class on ${shortDateLabel(missed.date)} at ${clockLabel(missed.startTime)} as missed.`;
+  return makeUpUntil ? `${base} You can still make it up for free until ${shortDateLabel(makeUpUntil)}. Tap Reschedule to pick a slot, or call ${ACADEMY_PHONE_LABEL}.` : base;
+}
+
+// The unanswered No is only turned into a skip while its class has just begun: from the
+// start time until this many minutes later. A class long over is left alone, so a family
+// is never messaged hours afterwards (or late at night) about a class that has happened.
+export const AUTO_SKIP_WINDOW_MINUTES = 90;
+
+// Whether a class starting at `startTime` ("HH:MM") has begun, but not so long ago that
+// it is past the window, given the minutes since midnight now.
+export function autoSkipDue(startTime: string, nowMinutes: number): boolean {
+  const [h, m] = startTime.split(":").map(Number);
+  const since = nowMinutes - (h * 60 + (m || 0));
+  return since >= 0 && since <= AUTO_SKIP_WINDOW_MINUTES;
+}
+
 export const REPLY_BUTTON_RESCHEDULE = "Reschedule";
 export const REPLY_BUTTON_CANCEL = "Cancel the class";
 

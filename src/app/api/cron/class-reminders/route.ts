@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { runScheduledReminders } from "@/lib/whatsapp-service";
+import { autoSkipUnansweredNos } from "@/lib/class-reply-service";
 
 // Called every few minutes by a cron entry on the server (see README), which
 // sends the CRON_SECRET as a bearer token. Each call checks the reminder time
@@ -23,5 +24,12 @@ export async function POST(request: NextRequest) {
   const result = await runScheduledReminders();
   // Most calls are "not due yet"; only log the ones that did something or have something to say.
   if (!("due" in result) && !(!result.ran && result.reason === "No classes today (Monday holiday)")) console.log("[cron] class reminders:", JSON.stringify(result));
-  return NextResponse.json(result);
+
+  // Also on every call: a No that was never followed up becomes a skip once its class has started.
+  const autoSkip = await autoSkipUnansweredNos().catch((e) => {
+    console.error("[cron] auto-skip failed:", e);
+    return { skipped: 0 };
+  });
+  if (autoSkip.skipped > 0) console.log("[cron] auto-skipped unanswered No replies:", autoSkip.skipped);
+  return NextResponse.json({ ...result, ...(autoSkip.skipped > 0 ? { autoSkipped: autoSkip.skipped } : {}) });
 }
