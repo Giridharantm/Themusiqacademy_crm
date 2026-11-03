@@ -160,11 +160,11 @@ export default async function DaySchedulePage({ searchParams }: { searchParams: 
                       ) : (
                         <ul className="mt-1.5 flex flex-wrap gap-1.5">
                           {s.students.map((st) => (
-                            <li key={st.id} className={`text-xs rounded-full border px-2.5 py-1 ${st.makeUp ? "bg-amber-50 border-amber-200 text-amber-800" : "bg-slate-50 border-slate-200 text-slate-700"}`}>
+                            <li key={st.id} className={`text-xs rounded-full border px-2.5 py-1 ${st.makeUp ? "bg-amber-50 border-amber-200 text-amber-800" : st.reply === "YES" ? "bg-emerald-50 border-emerald-300 text-emerald-800" : st.reply === "NO" ? "bg-red-50 border-red-300 text-red-800" : "bg-slate-50 border-slate-200 text-slate-700"}`}>
                               <Link href={`/admin/students/${st.id}`} className="hover:underline">{st.name}</Link>
                               {st.makeUp ? " · make-up" : ""}
-                              {st.reply === "YES" && <span className="text-emerald-700"> · confirmed</span>}
-                              {st.reply === "NO" && <span className="text-red-700"> · said no</span>}
+                              {st.reply === "YES" && " · confirmed"}
+                              {st.reply === "NO" && " · said no"}
                               {st.present ? " ✓" : ""}
                             </li>
                           ))}
@@ -181,7 +181,7 @@ export default async function DaySchedulePage({ searchParams }: { searchParams: 
               </ul>
             </Card>
           ))}
-          <p className="text-xs text-slate-400">✓ = marked present. Amber = here for a make-up class. &ldquo;confirmed&rdquo; / &ldquo;said no&rdquo; = their answer to the WhatsApp reminder.</p>
+          <p className="text-xs text-slate-400">✓ = marked present. Amber = here for a make-up class. Green = confirmed on the WhatsApp reminder, red = said they can't come, grey = no reply yet.</p>
         </div>
       )}
     </div>
