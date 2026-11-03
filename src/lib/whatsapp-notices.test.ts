@@ -7,6 +7,10 @@ import {
   DECISION_LABELS,
   filterReminderRows,
   nextReminderDateStr,
+  reminderRunDue,
+  isReminderTime,
+  compReminderMessage,
+  dedupeCompRecipients,
   shortDateLabel,
   clockLabel,
   sanitizeParam,
@@ -205,6 +209,71 @@ describe("nextReminderDateStr", () => {
     expect(nextReminderDateStr(new Date("2026-10-25T12:00:00Z"))).toBe("2026-10-27"); // Sun evening -> Tue
     expect(nextReminderDateStr(new Date("2026-10-26T05:00:00Z"))).toBe("2026-10-27"); // Mon -> Tue
     expect(nextReminderDateStr(new Date("2026-10-26T22:00:00Z"))).toBe("2026-10-27"); // Mon 03:30 IST Tue is today
+  });
+
+  it("follows the reminder time that is set", () => {
+    const at = new Date("2026-10-27T05:00:00Z"); // Tue 10:30 IST
+    expect(nextReminderDateStr(at, "10:00")).toBe("2026-10-28");
+    expect(nextReminderDateStr(at, "11:00")).toBe("2026-10-27");
+    expect(nextReminderDateStr(new Date("2026-10-27T04:59:00Z"), "10:30")).toBe("2026-10-27"); // 10:29 IST, not yet 10:30
+    expect(nextReminderDateStr(new Date("2026-10-27T05:00:00Z"), "10:30")).toBe("2026-10-28"); // 10:30 IST -> tomorrow
+  });
+});
+
+describe("reminderRunDue", () => {
+  const tue = (utc: string) => new Date(`2026-10-27T${utc}:00Z`); // Tue; 04:30Z is 10:00 IST
+
+  it("is not due before the set time", () => {
+    expect(reminderRunDue(tue("04:29"), "10:00", null)).toBe(false);
+    expect(reminderRunDue(tue("04:29"), "11:00", null)).toBe(false);
+  });
+
+  it("is due from the set time until the catch-up window closes", () => {
+    expect(reminderRunDue(tue("04:30"), "10:00", null)).toBe(true);
+    expect(reminderRunDue(tue("06:29"), "10:00", null)).toBe(true); // 11:59 IST
+    expect(reminderRunDue(tue("06:30"), "10:00", null)).toBe(false); // 12:00 IST, two hours on
+  });
+
+  it("follows a changed time", () => {
+    expect(reminderRunDue(tue("04:30"), "11:00", null)).toBe(false);
+    expect(reminderRunDue(tue("05:30"), "11:00", null)).toBe(true);
+  });
+
+  it("does not run twice in a day, but does the next day", () => {
+    expect(reminderRunDue(tue("04:35"), "10:00", "2026-10-27")).toBe(false);
+    expect(reminderRunDue(tue("04:35"), "10:00", "2026-10-26")).toBe(true);
+  });
+});
+
+describe("isReminderTime", () => {
+  it("accepts half-hour times from 07:00 to 17:00 only", () => {
+    expect(isReminderTime("10:00")).toBe(true);
+    expect(isReminderTime("17:00")).toBe(true);
+    expect(isReminderTime("06:30")).toBe(false);
+    expect(isReminderTime("10:15")).toBe(false);
+    expect(isReminderTime("later")).toBe(false);
+  });
+});
+
+describe("comp class notice", () => {
+  it("uses the daily reminder wording with 'comp' added and no buttons or progress", () => {
+    const m = compReminderMessage({ studentName: "Aditi", courseName: "Carnatic" }, "17:30");
+    expect(m).toEqual({ template: TEMPLATE_REMINDER, params: ["Aditi", "Carnatic comp", "5:30 PM"] });
+    expect(renderTemplate(TEMPLATE_BODIES[m.template], m.params)).toBe("Hello! A reminder from The Musiq Academy: Aditi's Carnatic comp class is today at 5:30 PM. See you at the academy!");
+  });
+
+  it("does not hold back the regular reminder", () => {
+    expect(NOTICE_TYPES.COMP_CLASS.suppressesReminder).toBe(false);
+  });
+
+  it("sends one message per student per instrument", () => {
+    const rows = [
+      { studentId: "a", courseName: "Carnatic", batchId: "b1" },
+      { studentId: "a", courseName: "Carnatic", batchId: "b2" },
+      { studentId: "a", courseName: "Violin", batchId: "b3" },
+      { studentId: "b", courseName: "Carnatic", batchId: "b1" },
+    ];
+    expect(dedupeCompRecipients(rows).map((r) => r.batchId)).toEqual(["b1", "b3", "b1"]);
   });
 });
 

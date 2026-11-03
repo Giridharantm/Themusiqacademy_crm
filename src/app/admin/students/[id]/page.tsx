@@ -645,7 +645,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             />
             <CardBody className="border-b border-slate-100 flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-slate-900">Daily 10:00 AM class reminder</p>
+                <p className="text-sm font-medium text-slate-900">Daily class reminder</p>
                 <p className="text-xs text-slate-500">{student.remindersOff ? "Turned off for this student" : "On — sent on class days if the number has agreed"}</p>
               </div>
               <form action={setStudentRemindersOff.bind(null, student.id, !student.remindersOff)}>

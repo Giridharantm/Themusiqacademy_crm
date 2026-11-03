@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
-import { runClassReminders } from "@/lib/whatsapp-service";
+import { runScheduledReminders } from "@/lib/whatsapp-service";
 
-// Called once a day at 10:00 IST by a cron entry on the server (see README),
-// which sends the CRON_SECRET as a bearer token. Sends "your class is today"
-// to every opted-in family with a class today. Running it twice is harmless:
-// each message has a unique key, so nobody is messaged twice.
+// Called every few minutes by a cron entry on the server (see README), which
+// sends the CRON_SECRET as a bearer token. Each call checks the reminder time
+// set on the Reminders page and, once it has passed, sends "your class is today"
+// to every opted-in family with a class today — once a day. Running it more
+// often is harmless: it does nothing until due, and each message has a unique
+// key, so nobody is messaged twice.
 export const dynamic = "force-dynamic";
 
 function authorized(request: NextRequest): boolean {
@@ -18,7 +20,8 @@ function authorized(request: NextRequest): boolean {
 
 export async function POST(request: NextRequest) {
   if (!authorized(request)) return new NextResponse("Unauthorized", { status: 401 });
-  const result = await runClassReminders();
-  console.log("[cron] class reminders:", JSON.stringify(result));
+  const result = await runScheduledReminders();
+  // Most calls are "not due yet"; only log the ones that did something or have something to say.
+  if (!("due" in result) && !(!result.ran && result.reason === "No classes today (Monday holiday)")) console.log("[cron] class reminders:", JSON.stringify(result));
   return NextResponse.json(result);
 }

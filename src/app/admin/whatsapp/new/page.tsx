@@ -1,14 +1,19 @@
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/attendance";
 import { sendNotice } from "@/lib/actions/whatsapp-actions";
 import { batchesOnDate, recipientsForBatches } from "@/lib/whatsapp-service";
+import { DAY_LABELS, OPERATING_DAYS } from "@/lib/schedule";
 import {
   NOTICE_TYPES,
   NOTICE_TYPE_KEYS,
   TEMPLATE_BODIES,
   TEMPLATE_NOTICE,
+  TEMPLATE_REMINDER,
   TEMPLATE_RESCHEDULED,
   clockLabel,
+  compReminderMessage,
+  dedupeCompRecipients,
   isNoticeType,
   istDateString,
   renderTemplate,
@@ -30,11 +35,16 @@ type Params = {
 };
 
 const RESCHEDULE_TIMES = Array.from({ length: 10 }, (_, i) => `${String(11 + i).padStart(2, "0")}:00`);
+// A comp class can start on the half hour too.
+const COMP_TIMES = Array.from({ length: 20 }, (_, i) => `${String(10 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
 
 export default async function NewNoticePage({ searchParams }: { searchParams: Promise<Params> }) {
   const sp = await searchParams;
   const type = sp.type && isNoticeType(sp.type) ? sp.type : "TEACHER_LEAVE";
-  const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? "") ? sp.date! : istDateString(new Date());
+  const isComp = type === "COMP_CLASS";
+  const today = istDateString(new Date());
+  // A comp class is announced on its own day ("your class is today at…"), so its date is always today.
+  const dateStr = isComp ? today : /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? "") ? sp.date! : today;
   const date = parseDateOnly(dateStr);
   const scope = sp.scope === "teacher" || sp.scope === "batches" ? sp.scope : "all";
   const newDateStr = /^\d{4}-\d{2}-\d{2}$/.test(sp.newDate ?? "") ? sp.newDate! : "";
@@ -46,24 +56,41 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
   const teachers = Array.from(new Map(dayBatches.filter((b) => b.teacher).map((b) => [b.teacher!.id, b.teacher!.name])).entries());
   const teacherId = sp.teacherId && teachers.some(([id]) => id === sp.teacherId) ? sp.teacherId : (teachers[0]?.[0] ?? "");
 
-  const selectedBatches =
-    scope === "all"
+  // A comp class can be for a batch on any day, so its picker lists every batch, grouped by instrument.
+  const allBatches = isComp
+    ? (await prisma.batch.findMany({ include: { course: true, teacher: true, _count: { select: { enrollments: { where: { status: "ACTIVE", student: { status: "ACTIVE" } } } } } } })).sort(
+        (a, b) =>
+          a.course.name.localeCompare(b.course.name) ||
+          OPERATING_DAYS.indexOf(a.dayOfWeek) - OPERATING_DAYS.indexOf(b.dayOfWeek) ||
+          a.startTime.localeCompare(b.startTime)
+      )
+    : [];
+  const batchesByCourse = Array.from(
+    allBatches.reduce((m, b) => m.set(b.course.name, [...(m.get(b.course.name) ?? []), b]), new Map<string, typeof allBatches>())
+  );
+
+  const selectedBatches = isComp
+    ? allBatches.filter((b) => pickedBatchIds.includes(b.id))
+    : scope === "all"
       ? dayBatches
       : scope === "teacher"
         ? dayBatches.filter((b) => b.teacherId === teacherId)
         : dayBatches.filter((b) => pickedBatchIds.includes(b.id));
 
   const isReschedule = type === "RESCHEDULE";
-  const ready = selectedBatches.length > 0 && (isReschedule ? !!newDateStr && !!newTime : message.trim().length > 0);
-  const recipients = sp.preview && ready ? await recipientsForBatches(selectedBatches.map((b) => b.id), parseDateOnly(dateStr)) : null;
+  const ready = selectedBatches.length > 0 && (isComp ? !!newTime : isReschedule ? !!newDateStr && !!newTime : message.trim().length > 0);
+  const batchIds = selectedBatches.map((b) => b.id);
+  const recipients = sp.preview && ready ? (isComp ? dedupeCompRecipients(await recipientsForBatches(batchIds)) : await recipientsForBatches(batchIds, parseDateOnly(dateStr))) : null;
 
   const willReceive = recipients ? recipients.reduce((n, r) => n + r.phones.filter((p) => p.consented).length, 0) : 0;
 
   const sampleParams = (r: { studentName: string; courseName: string; startTime: string }) =>
-    isReschedule
-      ? [r.studentName, r.courseName, `${shortDateLabel(date)}, ${clockLabel(r.startTime)}`, newDateStr && newTime ? `${shortDateLabel(parseDateOnly(newDateStr))}, ${clockLabel(newTime)}` : ""]
-      : [r.studentName, r.courseName, shortDateLabel(date), message];
-  const sampleBody = TEMPLATE_BODIES[isReschedule ? TEMPLATE_RESCHEDULED : TEMPLATE_NOTICE];
+    isComp
+      ? compReminderMessage(r, newTime).params
+      : isReschedule
+        ? [r.studentName, r.courseName, `${shortDateLabel(date)}, ${clockLabel(r.startTime)}`, newDateStr && newTime ? `${shortDateLabel(parseDateOnly(newDateStr))}, ${clockLabel(newTime)}` : ""]
+        : [r.studentName, r.courseName, shortDateLabel(date), message];
+  const sampleBody = TEMPLATE_BODIES[isComp ? TEMPLATE_REMINDER : isReschedule ? TEMPLATE_RESCHEDULED : TEMPLATE_NOTICE];
 
   return (
     <div>
@@ -90,6 +117,45 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
                   </option>
                 ))}
               </Select>
+              {isComp ? (
+                <>
+                  <input type="hidden" name="date" value={today} />
+                  <p className="text-xs text-slate-500">
+                    Goes out in the daily reminder wording &mdash; &ldquo;&hellip;&apos;s Carnatic comp class is today at &hellip;&rdquo; &mdash; to the regular students of the batches you tick, for a class held today ({shortDateLabel(date)}).
+                  </p>
+                  <Select label="Comp class starts at" name="newTime" defaultValue={newTime}>
+                    <option value="">Choose…</option>
+                    {COMP_TIMES.map((t) => (
+                      <option key={t} value={t}>
+                        {clockLabel(t)}
+                      </option>
+                    ))}
+                  </Select>
+                  <fieldset>
+                    <legend className="block text-sm font-medium text-ink mb-1">Batches that get the comp class (any day)</legend>
+                    <div className="max-h-96 overflow-y-auto rounded-md border border-line">
+                      {batchesByCourse.map(([course, list]) => (
+                        <div key={course} className="border-b border-slate-100 last:border-0">
+                          <p className="bg-panel px-3 py-1.5 text-xs font-medium text-slate-600">{course}</p>
+                          {list.map((b) => (
+                            <label key={b.id} className="flex items-center gap-2 px-3 py-2 text-sm">
+                              <input type="checkbox" name="batchId" value={b.id} defaultChecked={pickedBatchIds.includes(b.id)} />
+                              <span>
+                                {DAY_LABELS[b.dayOfWeek]} {clockLabel(b.startTime)}
+                                <span className="text-slate-500">
+                                  {" "}
+                                  · {b.teacher?.name ?? "No teacher"} · {b._count.enrollments} student{b._count.enrollments === 1 ? "" : "s"}
+                                </span>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </fieldset>
+                </>
+              ) : (
+                <>
               <Input label="Class date" name="date" type="date" defaultValue={dateStr} required />
 
               <Select label="Which classes" name="scope" defaultValue={scope}>
@@ -124,8 +190,10 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
                   </div>
                 )}
               </fieldset>
+                </>
+              )}
 
-              {isReschedule ? (
+              {isComp ? null : isReschedule ? (
                 <div className="grid grid-cols-2 gap-3">
                   <Input label="Moved to (date)" name="newDate" type="date" defaultValue={newDateStr} required />
                   <Select label="New start time" name="newTime" defaultValue={newTime}>
@@ -157,10 +225,14 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
               <EmptyState
                 text={
                   selectedBatches.length === 0
-                    ? "No classes selected for that date"
-                    : isReschedule
-                      ? "Choose the new date and time"
-                      : "Write the message"
+                    ? isComp
+                      ? "Tick at least one batch"
+                      : "No classes selected for that date"
+                    : isComp
+                      ? "Choose the time the comp class starts"
+                      : isReschedule
+                        ? "Choose the new date and time"
+                        : "Write the message"
                 }
               />
             ) : recipients && recipients.length === 0 ? (
@@ -169,7 +241,7 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
               <div className="space-y-4">
                 <p className="text-sm text-slate-700">
                   <strong>{willReceive}</strong> message{willReceive === 1 ? "" : "s"} will be sent for {recipients.length} student
-                  {recipients.length === 1 ? "" : "s"} in {selectedBatches.length} class{selectedBatches.length === 1 ? "" : "es"}.
+                  {recipients.length === 1 ? "" : "s"} in {selectedBatches.length} {isComp ? "batch" : "class"}{selectedBatches.length === 1 ? "" : "es"}.
                 </p>
 
                 <div className="rounded-md bg-emerald-50 border border-emerald-100 px-3 py-2 text-sm text-emerald-900">
@@ -182,7 +254,7 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
                       <div className="min-w-0">
                         <p className="text-sm text-slate-900">{r.studentName}</p>
                         <p className="text-xs text-slate-500">
-                          {r.courseName} · {clockLabel(r.startTime)}
+                          {r.courseName} · {isComp ? `regular class ${clockLabel(r.startTime)}, comp ${clockLabel(newTime)}` : clockLabel(r.startTime)}
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
@@ -225,7 +297,7 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
                 )}
                 {NOTICE_TYPES[type].suppressesReminder && (
                   <p className="text-xs text-slate-500">
-                    Once sent, the 10:00 AM reminder for these classes on {shortDateLabel(date)} is skipped, so families don&apos;t get a &ldquo;class today&rdquo; message as well.
+                    Once sent, the daily reminder for these classes on {shortDateLabel(date)} is skipped, so families don&apos;t get a &ldquo;class today&rdquo; message as well.
                   </p>
                 )}
               </div>

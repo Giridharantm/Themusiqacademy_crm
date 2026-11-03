@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Card, CardBody, CardHeader, PageHeader, StatCard, EmptyState, Badge } from "@/components/ui";
-import { NOTICE_TYPES, istLabel } from "@/lib/whatsapp-notices";
+import { NOTICE_TYPES, clockLabel, istLabel } from "@/lib/whatsapp-notices";
 import { isDryRun, whatsappConfigured } from "@/lib/whatsapp-send";
-import { getRemindersPaused } from "@/lib/whatsapp-service";
+import { getReminderSchedule, getRemindersPaused } from "@/lib/whatsapp-service";
 import { format } from "date-fns";
 
 const statusColors: Record<string, string> = { SENT: "green", FAILED: "red", PENDING: "yellow", DRY_RUN: "blue" };
@@ -15,12 +15,13 @@ export default async function WhatsAppPage({
 }) {
   const { sent, ok, failed, skipped } = await searchParams;
 
-  const [optedIn, activeStudents, notices, messages, pause] = await Promise.all([
+  const [optedIn, activeStudents, notices, messages, pause, schedule] = await Promise.all([
     prisma.whatsAppContact.count({ where: { optedIn: true } }),
     prisma.student.count({ where: { status: "ACTIVE" } }),
     prisma.notice.findMany({ orderBy: { createdAt: "desc" }, take: 15 }),
     prisma.whatsAppMessage.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
     getRemindersPaused(),
+    getReminderSchedule(),
   ]);
 
   const configured = whatsappConfigured();
@@ -29,11 +30,14 @@ export default async function WhatsAppPage({
     <div>
       <PageHeader
         title="WhatsApp"
-        subtitle="Daily class reminders at 10:00 AM and ad hoc notices to students' families"
+        subtitle={`Daily class reminders at ${clockLabel(schedule.time)} and ad hoc notices to students' families`}
         action={
           <div className="flex items-center gap-2">
             <Link href="/admin/whatsapp/reminders" className="inline-flex items-center px-3.5 py-2 rounded-md text-sm font-medium bg-white text-ink border border-line hover:bg-panel">
               Class reminders
+            </Link>
+            <Link href="/admin/whatsapp/new?type=COMP_CLASS" className="inline-flex items-center px-3.5 py-2 rounded-md text-sm font-medium bg-white text-ink border border-line hover:bg-panel">
+              Comp class
             </Link>
             <Link href="/admin/whatsapp/new" className="inline-flex items-center px-3.5 py-2 rounded-md text-sm font-medium bg-accent text-white hover:bg-accent-dark">
               New notice
@@ -66,8 +70,8 @@ export default async function WhatsAppPage({
         <StatCard label="Numbers that agreed to WhatsApp" value={optedIn} hint="A family agrees by messaging 70901 20000, or you record it on the student's page" />
         <StatCard
           label="Daily reminder"
-          value={pause.paused ? "PAUSED" : "10:00 AM"}
-          hint={pause.paused ? "Nothing is sent until you resume. Click to see who and to resume." : "Every class day, for that day's classes. Click to see who gets it, pause, or take someone off."}
+          value={pause.paused ? "PAUSED" : clockLabel(schedule.time)}
+          hint={pause.paused ? "Nothing is sent automatically until you resume. Click to see who, resume, or send today's by hand." : "Every class day, for that day's classes. Click to see who gets it, change the time, send it by hand, pause, or take someone off."}
           href="/admin/whatsapp/reminders"
         />
       </div>

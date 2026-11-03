@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { parseDateOnly } from "@/lib/attendance";
-import { setReminderButtonsAction, setRemindersPausedAction, setStudentRemindersOff, toggleReminderSkip } from "@/lib/actions/whatsapp-actions";
-import { getReminderButtons, getRemindersPaused, planReminders } from "@/lib/whatsapp-service";
+import { sendRemindersNowAction, setReminderButtonsAction, setReminderTimeAction, setRemindersPausedAction, setStudentRemindersOff, toggleReminderSkip } from "@/lib/actions/whatsapp-actions";
+import { getReminderButtons, getReminderSchedule, getRemindersPaused, planReminders } from "@/lib/whatsapp-service";
 import {
   DECISION_LABELS,
+  REMINDER_TIME_OPTIONS,
   TEMPLATE_BODIES,
   clockLabel,
   filterReminderRows,
@@ -33,16 +34,21 @@ const addDays = (dateStr: string, n: number) => new Date(parseDateOnly(dateStr).
 export default async function RemindersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; course?: string; time?: string; status?: string; q?: string }>;
+  searchParams: Promise<{ date?: string; course?: string; time?: string; status?: string; q?: string; sentNow?: string; failedNow?: string; alreadyNow?: string; notSent?: string }>;
 }) {
   const sp = await searchParams;
   const now = new Date();
   const today = istDateString(now);
-  const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? "") ? sp.date! : nextReminderDateStr(now);
+  const schedule = await getReminderSchedule();
+  const atLabel = clockLabel(schedule.time);
+  const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? "") ? sp.date! : nextReminderDateStr(now, schedule.time);
   const date = parseDateOnly(dateStr);
   const isPast = dateStr < today;
 
-  const [plan, pause, buttons] = await Promise.all([planReminders(dateStr), getRemindersPaused(), getReminderButtons()]);
+  const [plan, pause, buttons, todayPlan] = await Promise.all([planReminders(dateStr), getRemindersPaused(), getReminderButtons(), planReminders(today)]);
+  // Today's reminders that haven't gone out yet (not sent, or a send that failed).
+  const todayPending = todayPlan.rows.filter((r) => r.decision === "SEND" && r.sentStatus !== "SENT" && r.sentStatus !== "DRY_RUN").length;
+  const todaySent = todayPlan.rows.filter((r) => r.sentStatus === "SENT").length;
 
   // Filters narrow the list below; the badges above still describe the whole day.
   const rows = filterReminderRows(plan.rows, { course: sp.course, time: sp.time, status: sp.status, q: sp.q });
@@ -70,13 +76,73 @@ export default async function RemindersPage({
     <div>
       <PageHeader
         title="Class reminders"
-        subtitle="Who gets the 10:00 AM WhatsApp reminder for a day's classes — and the controls to pause it or take someone off"
+        subtitle={`Who gets the ${atLabel} WhatsApp reminder for a day's classes — and the controls to set the time, pause it, send it by hand or take someone off`}
         action={
           <Link href="/admin/whatsapp" className="text-sm text-indigo-600 hover:underline">
             Back to WhatsApp
           </Link>
         }
       />
+
+      {sp.sentNow !== undefined && (
+        <p className="mb-4 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">
+          Sent {sp.sentNow} reminder{sp.sentNow === "1" ? "" : "s"}
+          {Number(sp.alreadyNow) > 0 ? `, ${sp.alreadyNow} had already gone out` : ""}
+          {Number(sp.failedNow) > 0 ? `, ${sp.failedNow} failed (see the list below)` : ""}.
+        </p>
+      )}
+      {sp.notSent && <p className="mb-4 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">Nothing was sent: {sp.notSent}.</p>}
+
+      <Card className="mb-6">
+        <CardBody className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div className="max-w-2xl">
+              <p className="text-sm font-medium text-slate-900">Reminder time: {atLabel}</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                The day&apos;s reminders go out automatically at this time. If the server was off or reminders were paused, they still go out for up to 2 hours after; later than that, use the button below.
+              </p>
+            </div>
+            <form action={setReminderTimeAction} className="flex items-end gap-2">
+              <label className="block">
+                <span className="block text-xs text-slate-500 mb-1">Send at</span>
+                <select key={schedule.time} name="time" defaultValue={schedule.time} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm">
+                  {REMINDER_TIME_OPTIONS.map((t) => (
+                    <option key={t} value={t}>
+                      {clockLabel(t)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Button type="submit" variant="secondary">
+                Save time
+              </Button>
+            </form>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-4">
+            <div className="max-w-2xl">
+              <p className="text-sm font-medium text-slate-900">Send today&apos;s reminders now</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {!todayPlan.isClassDay
+                  ? "No classes today (Monday holiday)."
+                  : todayPending === 0
+                    ? `Today's reminders have all gone out (${todaySent} sent).`
+                    : `${todayPending} reminder${todayPending === 1 ? "" : "s"} for today haven't gone out yet${todaySent ? ` (${todaySent} already sent)` : ""}. Works even while reminders are paused; anyone already messaged is skipped.`}
+                {schedule.lastRunAt ? ` Last run: ${istLabel(schedule.lastRunAt)}, ${schedule.lastRunSummary}.` : ""}
+              </p>
+            </div>
+            {todayPlan.isClassDay && todayPending > 0 && (
+              <form action={sendRemindersNowAction}>
+                <ConfirmSubmitButton
+                  variant="primary"
+                  confirmMessage={`Send ${todayPending} WhatsApp reminder${todayPending === 1 ? "" : "s"} for today's classes now?${pause.paused ? " Reminders are paused, but this will still send." : ""} This can't be undone.`}
+                >
+                  Send today&apos;s reminders now
+                </ConfirmSubmitButton>
+              </form>
+            )}
+          </div>
+        </CardBody>
+      </Card>
 
       <Card className="mb-6">
         <CardBody className="flex flex-wrap items-center justify-between gap-4">
@@ -87,14 +153,14 @@ export default async function RemindersPage({
             </p>
             <p className="text-xs text-slate-500 mt-0.5">
               {pause.paused
-                ? `Nothing is sent at 10:00 AM until you resume${pause.changedBy ? ` (paused by ${pause.changedBy}${pause.changedAt ? ", " + istLabel(pause.changedAt) : ""})` : ""}. Notices and inbox replies still work.`
-                : "Sent every class day at 10:00 AM to the families below who have agreed. Monday is a holiday."}
+                ? `Nothing is sent automatically at ${atLabel} until you resume${pause.changedBy ? ` (paused by ${pause.changedBy}${pause.changedAt ? ", " + istLabel(pause.changedAt) : ""})` : ""}. Notices, inbox replies and "Send today's reminders now" still work.`
+                : `Sent every class day at ${atLabel} to the families below who have agreed. Monday is a holiday.`}
             </p>
           </div>
           <form action={setRemindersPausedAction.bind(null, !pause.paused)}>
             <ConfirmSubmitButton
               variant={pause.paused ? "primary" : "secondary"}
-              confirmMessage={pause.paused ? "Resume the daily 10:00 AM reminders?" : "Pause ALL daily reminders? Nothing will be sent at 10:00 AM until you resume."}
+              confirmMessage={pause.paused ? `Resume the daily ${atLabel} reminders?` : `Pause ALL daily reminders? Nothing will be sent automatically at ${atLabel} until you resume.`}
             >
               {pause.paused ? "Resume reminders" : "Pause reminders"}
             </ConfirmSubmitButton>

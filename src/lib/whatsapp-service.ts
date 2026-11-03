@@ -10,13 +10,17 @@ import {
   NOTICE_TYPES,
   TEMPLATE_NOTICE,
   TEMPLATE_RESCHEDULED,
+  DEFAULT_REMINDER_TIME,
   canAutoConsent,
   clockLabel,
+  compReminderMessage,
+  dedupeCompRecipients,
   istDateString,
   normalizePhone,
   recipientPhones,
   reminderDecision,
   reminderMessage,
+  reminderRunDue,
   shortDateLabel,
   type ClassProgress,
   type ReminderDecision,
@@ -253,6 +257,26 @@ export async function setReminderButtons(on: boolean, changedBy: string) {
   });
 }
 
+export type ReminderSchedule = { time: string; lastAutoRunDate: string | null; lastRunAt: Date | null; lastRunSummary: string | null };
+
+export async function getReminderSchedule(): Promise<ReminderSchedule> {
+  const row = await prisma.whatsAppSettings.findUnique({ where: { id: "main" } });
+  return {
+    time: row?.reminderTime ?? DEFAULT_REMINDER_TIME,
+    lastAutoRunDate: row?.lastAutoRunDate ?? null,
+    lastRunAt: row?.lastRunAt ?? null,
+    lastRunSummary: row?.lastRunSummary ?? null,
+  };
+}
+
+export async function setReminderTime(time: string, changedBy: string) {
+  await prisma.whatsAppSettings.upsert({
+    where: { id: "main" },
+    create: { id: "main", reminderTime: time, changedBy },
+    update: { reminderTime: time },
+  });
+}
+
 export type ReminderPlanRow = {
   key: string; // the unique message key — also what stops a double send
   studentId: string;
@@ -345,11 +369,12 @@ export type ReminderRun =
   | ({ ran: true; date: string; classes: number; excluded: number } & Tally);
 
 // Sends "your class is today" for every class today (India date) that the plan
-// marks SEND. Does nothing while reminders are paused. Safe to run twice: each
-// message has a unique key, so nobody is messaged twice for the same class.
-export async function runClassReminders(now = new Date()): Promise<ReminderRun> {
+// marks SEND. Does nothing while reminders are paused, unless staff asked for it
+// by hand. Safe to run twice: each message has a unique key, so nobody is
+// messaged twice for the same class (a failed one is retried).
+export async function runClassReminders(now = new Date(), opts: { ignorePause?: boolean } = {}): Promise<ReminderRun> {
   if (!whatsappConfigured()) return { ran: false, reason: "WhatsApp sending is not configured" };
-  if ((await getRemindersPaused()).paused) return { ran: false, reason: "Reminders are paused" };
+  if (!opts.ignorePause && (await getRemindersPaused()).paused) return { ran: false, reason: "Reminders are paused" };
 
   const dateStr = istDateString(now);
   const plan = await planReminders(dateStr);
@@ -376,6 +401,39 @@ export async function runClassReminders(now = new Date()): Promise<ReminderRun> 
   return { ran: true, date: dateStr, classes: plan.classes, excluded, ...tally };
 }
 
+const runSummary = (run: ReminderRun) =>
+  run.ran ? `${run.sent} sent${run.failed ? `, ${run.failed} failed` : ""}${run.duplicate ? `, ${run.duplicate} already sent` : ""}${run.noConsent ? `, ${run.noConsent} not agreed` : ""}` : run.reason;
+
+// Remembers the last run that actually went out, and that today's reminders are done.
+async function recordRun(run: ReminderRun, now: Date, by: string) {
+  if (!run.ran) return;
+  const data = { lastRunAt: now, lastRunSummary: `${by}: ${runSummary(run)}`, lastAutoRunDate: run.date };
+  await prisma.whatsAppSettings.upsert({ where: { id: "main" }, create: { id: "main", ...data }, update: data });
+}
+
+export type ScheduledRun = ReminderRun | { ran: false; reason: string; due: false };
+
+// What the server's every-few-minutes job calls. Sends today's reminders once,
+// when the clock passes the time set on the Reminders page (and within the
+// catch-up window after it); otherwise does nothing and says why.
+export async function runScheduledReminders(now = new Date()): Promise<ScheduledRun> {
+  const schedule = await getReminderSchedule();
+  if (!reminderRunDue(now, schedule.time, schedule.lastAutoRunDate)) return { ran: false, reason: "Not due", due: false };
+  const run = await runClassReminders(now);
+  // A run that did nothing (paused, holiday) isn't recorded, so it can still go out once resumed.
+  await recordRun(run, now, "Automatic");
+  return run;
+}
+
+// "Send today's reminders now": works whether or not reminders are paused or the
+// automatic run already happened. Anyone already sent is skipped, so it is safe
+// to press more than once.
+export async function sendRemindersNow(now = new Date()): Promise<ReminderRun> {
+  const run = await runClassReminders(now, { ignorePause: true });
+  await recordRun(run, now, "Sent by hand");
+  return run;
+}
+
 // ---- ad hoc notices -------------------------------------------------------
 
 export type NoticeInput = {
@@ -384,7 +442,7 @@ export type NoticeInput = {
   batchIds: string[];
   message: string;
   newDateStr?: string; // RESCHEDULE
-  newStartTime?: string; // RESCHEDULE, "HH:MM"
+  newStartTime?: string; // RESCHEDULE: the new start time; COMP_CLASS: the comp class's start time ("HH:MM")
   createdById?: string;
 };
 
@@ -393,8 +451,14 @@ export async function createAndSendNotice(input: NoticeInput): Promise<{ noticeI
   if (batchIds.length === 0) throw new Error("Choose at least one class");
   const date = parseDateOnly(dateStr);
   const isReschedule = type === "RESCHEDULE";
+  const isComp = type === "COMP_CLASS";
   if (isReschedule && (!input.newDateStr || !input.newStartTime)) throw new Error("A reschedule needs the new date and time");
-  if (!isReschedule && !input.message.trim()) throw new Error("Write the message to send");
+  if (isComp) {
+    if (!input.newStartTime) throw new Error("A comp class needs its start time");
+    // The message says "class is today", so a comp class is announced on its own day.
+    if (dateStr !== istDateString(new Date())) throw new Error("A comp class message is for today's class");
+  }
+  if (!isReschedule && !isComp && !input.message.trim()) throw new Error("Write the message to send");
 
   const notice = await prisma.notice.create({
     data: {
@@ -403,12 +467,14 @@ export async function createAndSendNotice(input: NoticeInput): Promise<{ noticeI
       batchIds,
       message: input.message.trim(),
       newDate: isReschedule && input.newDateStr ? parseDateOnly(input.newDateStr) : null,
-      newStartTime: isReschedule ? input.newStartTime : null,
+      newStartTime: isReschedule || isComp ? input.newStartTime : null,
       createdById: input.createdById ?? null,
     },
   });
 
-  const recipients = await recipientsForBatches(batchIds, parseDateOnly(dateStr));
+  // A comp class goes to the regular students of the chosen batches (whatever day
+  // those batches meet), one message per student per instrument.
+  const recipients = isComp ? dedupeCompRecipients(await recipientsForBatches(batchIds)) : await recipientsForBatches(batchIds, parseDateOnly(dateStr));
   const tally = emptyTally();
   for (const r of recipients) {
     for (const { phone, consented } of r.phones) {
@@ -418,16 +484,21 @@ export async function createAndSendNotice(input: NoticeInput): Promise<{ noticeI
       }
       const oldSlot = `${shortDateLabel(date)}, ${clockLabel(r.startTime)}`;
       const newSlot = isReschedule ? `${shortDateLabel(parseDateOnly(input.newDateStr!))}, ${clockLabel(input.newStartTime!)}` : "";
+      const message = isComp
+        ? compReminderMessage(r, input.newStartTime!)
+        : {
+            template: isReschedule ? TEMPLATE_RESCHEDULED : TEMPLATE_NOTICE,
+            params: isReschedule ? [r.studentName, r.courseName, oldSlot, newSlot] : [r.studentName, r.courseName, shortDateLabel(date), input.message],
+          };
       const outcome = await sendLogged({
         kind: "NOTICE",
         phone,
         studentId: r.studentId,
         noticeId: notice.id,
-        template: isReschedule ? TEMPLATE_RESCHEDULED : TEMPLATE_NOTICE,
-        params: isReschedule
-          ? [r.studentName, r.courseName, oldSlot, newSlot]
-          : [r.studentName, r.courseName, shortDateLabel(date), input.message],
-        summary: `${NOTICE_TYPES[type].label} · ${r.courseName} ${clockLabel(r.startTime)} · ${r.studentName}`,
+        ...message,
+        summary: isComp
+          ? `${NOTICE_TYPES[type].label} · ${r.courseName} ${clockLabel(input.newStartTime!)} · ${r.studentName}`
+          : `${NOTICE_TYPES[type].label} · ${r.courseName} ${clockLabel(r.startTime)} · ${r.studentName}`,
         dedupeKey: `notice:${notice.id}:${r.studentId}:${r.batchId}:${phone}`,
       });
       tally[outcome]++;

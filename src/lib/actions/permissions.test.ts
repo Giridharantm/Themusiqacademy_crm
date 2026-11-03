@@ -17,7 +17,7 @@ const ADMIN_ONLY: Record<string, string[]> = {
   "user-admin-actions.ts": ["createFrontDesk", "updateUserDetails", "setUserPassword", "resetLearnerPasswordToPhone", "setUserStatus", "deleteUser"],
   "expense-actions.ts": ["createExpenseCategory", "updateExpenseCategory"],
   "payroll-actions.ts": ["setTeacherPay", "createPayslip", "updatePayslipDetails", "addPayslipLine", "removePayslipLine", "finalisePayslip", "reopenPayslip", "deletePayslip"],
-  "whatsapp-actions.ts": ["sendNotice", "setPhoneConsent", "setRemindersPausedAction", "setReminderButtonsAction","toggleReminderSkip", "setStudentRemindersOff"],
+  "whatsapp-actions.ts": ["sendNotice", "setPhoneConsent", "setRemindersPausedAction", "setReminderButtonsAction", "setReminderTimeAction", "sendRemindersNowAction", "toggleReminderSkip", "setStudentRemindersOff"],
 };
 
 const FRONT_DESK_OK: Record<string, string[]> = {

@@ -5,8 +5,8 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/authz";
 import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/attendance";
-import { blockNumber, createAndSendNotice, markConversationRead, sendConversationReply, setConsent, setReminderButtons, setRemindersPaused, unblockNumber } from "@/lib/whatsapp-service";
-import { isNoticeType, normalizePhone } from "@/lib/whatsapp-notices";
+import { blockNumber, createAndSendNotice, markConversationRead, sendConversationReply, sendRemindersNow, setConsent, setReminderButtons, setReminderTime, setRemindersPaused, unblockNumber } from "@/lib/whatsapp-service";
+import { isNoticeType, isReminderTime, normalizePhone } from "@/lib/whatsapp-notices";
 
 // Sends an ad hoc notice to the opted-in families of the chosen classes. The
 // form that posts here is the confirmation step after a recipient preview.
@@ -79,6 +79,31 @@ export async function setRemindersPausedAction(paused: boolean) {
   await setRemindersPaused(paused, user.name ?? "an admin");
   revalidatePath("/admin/whatsapp");
   revalidatePath("/admin/whatsapp/reminders");
+}
+
+// The time of day the automatic reminder goes out.
+export async function setReminderTimeAction(formData: FormData) {
+  const user = await requireRole("ADMIN");
+  const time = String(formData.get("time") ?? "");
+  if (!isReminderTime(time)) throw new Error("Choose a time from the list");
+  await setReminderTime(time, user.name ?? "an admin");
+  revalidatePath("/admin/whatsapp");
+  revalidatePath("/admin/whatsapp/reminders");
+}
+
+// "Send today's reminders now": for when the automatic run is off (paused) or
+// didn't go out. Skips anyone already messaged today.
+export async function sendRemindersNowAction() {
+  await requireRole("ADMIN");
+  const run = await sendRemindersNow();
+  revalidatePath("/admin/whatsapp");
+  revalidatePath("/admin/whatsapp/reminders");
+  const q = new URLSearchParams(
+    run.ran
+      ? { sentNow: String(run.sent), failedNow: String(run.failed), alreadyNow: String(run.duplicate) }
+      : { notSent: run.reason }
+  );
+  redirect(`/admin/whatsapp/reminders?${q.toString()}`);
 }
 
 // Switches the "Yes, I'll attend" / "No, can't attend" buttons on the daily reminder on

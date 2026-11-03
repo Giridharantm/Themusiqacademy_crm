@@ -16,7 +16,7 @@ export const REMINDER_BUTTON_LABELS = ["Yes, I'll attend", "No, can't attend"] a
 export const TEMPLATE_RESCHEDULED = "class_rescheduled"; // {{1}} student, {{2}} instrument, {{3}} old slot, {{4}} new slot
 export const TEMPLATE_NOTICE = "class_notice"; // {{1}} student, {{2}} instrument, {{3}} date, {{4}} message
 
-export type NoticeTypeKey = "TEACHER_LEAVE" | "TEACHER_LATE" | "RESCHEDULE" | "CLASS_CANCELLED" | "ACADEMY_LEAVE" | "OTHER";
+export type NoticeTypeKey = "TEACHER_LEAVE" | "TEACHER_LATE" | "RESCHEDULE" | "COMP_CLASS" | "CLASS_CANCELLED" | "ACADEMY_LEAVE" | "OTHER";
 
 export const NOTICE_TYPES: Record<
   NoticeTypeKey,
@@ -42,6 +42,11 @@ export const NOTICE_TYPES: Record<
   RESCHEDULE: {
     label: "Reschedule a class",
     suppressesReminder: true,
+    defaultMessage: "",
+  },
+  COMP_CLASS: {
+    label: "Comp class (make-up for a teacher's absence)",
+    suppressesReminder: false,
     defaultMessage: "",
   },
   CLASS_CANCELLED: {
@@ -237,18 +242,75 @@ export const DECISION_LABELS: Record<ReminderDecision, string> = {
   NO_CONSENT: "Hasn't agreed to WhatsApp",
 };
 
-const REMINDER_HOUR_IST = 10;
 const OPERATING_WEEKDAYS = new Set([2, 3, 4, 5, 6, 0]); // Tue–Sun (JS getDay); Monday is the holiday
 
+export const DEFAULT_REMINDER_TIME = "10:00";
+// How long after the set time the automatic run still goes out, so a short
+// outage or a late resume doesn't skip the day but nobody gets "class today"
+// in the evening. Past this, use "Send today's reminders now".
+export const REMINDER_CATCH_UP_MINUTES = 120;
+
+// Times the reminder can be set to: every half hour from 07:00 to 17:00.
+export const REMINDER_TIME_OPTIONS = Array.from({ length: 21 }, (_, i) => {
+  const mins = 7 * 60 + i * 30;
+  return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+});
+
+export const isReminderTime = (v: string) => REMINDER_TIME_OPTIONS.includes(v);
+
+const minutesOf = (time: string) => {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + (m || 0);
+};
+
+// Minutes since midnight at the academy (India time).
+export function istMinutes(now: Date): number {
+  const [h, m] = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" })
+    .format(now)
+    .split(":")
+    .map(Number);
+  return (h % 24) * 60 + m;
+}
+
 // The date ("YYYY-MM-DD") of the next reminder run that hasn't happened yet:
-// today before 10:00 IST, otherwise the next day — skipping Monday.
-export function nextReminderDateStr(now: Date): string {
-  const hourIst = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hour12: false, timeZone: "Asia/Kolkata" }).format(now)) % 24;
+// today before the reminder time (India), otherwise the next day — skipping Monday.
+export function nextReminderDateStr(now: Date, reminderTime = DEFAULT_REMINDER_TIME): string {
   const [y, m, d] = istDateString(now).split("-").map(Number);
   let day = new Date(Date.UTC(y, m - 1, d));
-  if (hourIst >= REMINDER_HOUR_IST) day = new Date(day.getTime() + 86_400_000);
+  if (istMinutes(now) >= minutesOf(reminderTime)) day = new Date(day.getTime() + 86_400_000);
   while (!OPERATING_WEEKDAYS.has(day.getUTCDay())) day = new Date(day.getTime() + 86_400_000);
   return day.toISOString().slice(0, 10);
+}
+
+// Whether the every-few-minutes job should send today's reminders now: it is
+// past the set time (but inside the catch-up window) and they haven't already
+// gone out today, whether by this job or by hand.
+export function reminderRunDue(now: Date, reminderTime: string, lastRunDate: string | null): boolean {
+  if (lastRunDate === istDateString(now)) return false;
+  const since = istMinutes(now) - minutesOf(reminderTime);
+  return since >= 0 && since < REMINDER_CATCH_UP_MINUTES;
+}
+
+// ---- comp classes ----------------------------------------------------------
+
+// A comp class is a make-up given when a teacher was off. It goes out in the
+// daily reminder's wording ("<student>'s <instrument> comp class is today at
+// <time>") on the same approved template, with "comp" added so families can
+// tell it from their regular class. No buttons and no progress count: it isn't
+// a regular class to attend or cancel.
+export function compReminderMessage(r: { studentName: string; courseName: string }, time: string): { template: string; params: string[] } {
+  return { template: TEMPLATE_REMINDER, params: [r.studentName, `${r.courseName} comp`, clockLabel(time)] };
+}
+
+// A student in two chosen batches of the same instrument still gets one message.
+export function dedupeCompRecipients<T extends { studentId: string; courseName: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    const key = `${r.studentId}:${r.courseName}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export type ReminderFilter = { course?: string; time?: string; status?: string; q?: string };

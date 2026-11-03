@@ -436,6 +436,7 @@ enum NoticeType {
   RESCHEDULE
   CLASS_CANCELLED
   ACADEMY_LEAVE
+  COMP_CLASS // a make-up class given because a teacher was off: the daily reminder wording, sent for any batches
   OTHER
 }
 
@@ -550,12 +551,18 @@ model ClassChange {
 
 // One row ("main"): the master switch for the daily 10:00 reminder.
 model WhatsAppSettings {
-  id              String   @id @default("main")
-  remindersPaused Boolean  @default(false)
+  id              String    @id @default("main")
+  remindersPaused Boolean   @default(false)
   // Send the reminder with "Can't attend" / "Reschedule" buttons. Off until
   // Meta has approved the two button templates.
-  buttonReminders Boolean  @default(false)
-  changedAt       DateTime @default(now())
+  buttonReminders Boolean   @default(false)
+  // When the daily reminders go out, India time ("HH:MM"). The server checks
+  // every few minutes and sends once, the first time it is past this time.
+  reminderTime    String    @default("10:00")
+  lastAutoRunDate String? // "YYYY-MM-DD": the day the reminders last went out (automatically or from the button)
+  lastRunAt       DateTime?
+  lastRunSummary  String? // e.g. "78 sent for 28 classes"
+  changedAt       DateTime  @default(now())
   changedBy       String? // name of the admin who last paused or resumed
 }
 
