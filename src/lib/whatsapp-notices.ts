@@ -302,6 +302,9 @@ export function compReminderMessage(r: { studentName: string; courseName: string
   return { template: TEMPLATE_REMINDER, params: [r.studentName, `${r.courseName} comp`, clockLabel(time)] };
 }
 
+// What identifies one comp class message on the preview and in the form: the student and the instrument.
+export const compPickKey = (r: { studentId: string; courseName: string }) => `${r.studentId}|${r.courseName}`;
+
 // A student in two chosen batches of the same instrument still gets one message.
 export function dedupeCompRecipients<T extends { studentId: string; courseName: string }>(rows: T[]): T[] {
   const seen = new Set<string>();

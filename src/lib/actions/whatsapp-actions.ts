@@ -23,6 +23,8 @@ export async function sendNotice(formData: FormData) {
     message: String(formData.get("message") ?? ""),
     newDateStr: String(formData.get("newDate") ?? "") || undefined,
     newStartTime: String(formData.get("newTime") ?? "") || undefined,
+    // A comp class goes only to the students ticked on the preview.
+    picks: type === "COMP_CLASS" ? formData.getAll("pick").map(String).filter(Boolean) : undefined,
     createdById: user.id,
   });
 

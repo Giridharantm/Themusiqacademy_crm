@@ -13,6 +13,7 @@ import {
   DEFAULT_REMINDER_TIME,
   canAutoConsent,
   clockLabel,
+  compPickKey,
   compReminderMessage,
   dedupeCompRecipients,
   istDateString,
@@ -443,6 +444,7 @@ export type NoticeInput = {
   message: string;
   newDateStr?: string; // RESCHEDULE
   newStartTime?: string; // RESCHEDULE: the new start time; COMP_CLASS: the comp class's start time ("HH:MM")
+  picks?: string[]; // COMP_CLASS: only these students' instruments (compPickKey) from the chosen batches get it
   createdById?: string;
 };
 
@@ -457,6 +459,7 @@ export async function createAndSendNotice(input: NoticeInput): Promise<{ noticeI
     if (!input.newStartTime) throw new Error("A comp class needs its start time");
     // The message says "class is today", so a comp class is announced on its own day.
     if (dateStr !== istDateString(new Date())) throw new Error("A comp class message is for today's class");
+    if (!input.picks?.length) throw new Error("Tick at least one student");
   }
   if (!isReschedule && !isComp && !input.message.trim()) throw new Error("Write the message to send");
 
@@ -474,7 +477,9 @@ export async function createAndSendNotice(input: NoticeInput): Promise<{ noticeI
 
   // A comp class goes to the regular students of the chosen batches (whatever day
   // those batches meet), one message per student per instrument.
-  const recipients = isComp ? dedupeCompRecipients(await recipientsForBatches(batchIds)) : await recipientsForBatches(batchIds, parseDateOnly(dateStr));
+  const recipients = isComp
+    ? dedupeCompRecipients((await recipientsForBatches(batchIds)).filter((r) => input.picks!.includes(compPickKey(r))))
+    : await recipientsForBatches(batchIds, parseDateOnly(dateStr));
   const tally = emptyTally();
   for (const r of recipients) {
     for (const { phone, consented } of r.phones) {

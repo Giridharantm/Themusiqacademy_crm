@@ -12,6 +12,7 @@ import {
   TEMPLATE_REMINDER,
   TEMPLATE_RESCHEDULED,
   clockLabel,
+  compPickKey,
   compReminderMessage,
   dedupeCompRecipients,
   isNoticeType,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/whatsapp-notices";
 import { Card, CardBody, CardHeader, PageHeader, Input, Select, Textarea, Button, Badge, EmptyState } from "@/components/ui";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { CompRecipientPicker } from "@/components/comp-recipient-picker";
 
 type Params = {
   type?: string;
@@ -239,15 +241,40 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
               <EmptyState text="Nobody is enrolled in those classes" />
             ) : recipients ? (
               <div className="space-y-4">
-                <p className="text-sm text-slate-700">
-                  <strong>{willReceive}</strong> message{willReceive === 1 ? "" : "s"} will be sent for {recipients.length} student
-                  {recipients.length === 1 ? "" : "s"} in {selectedBatches.length} {isComp ? "batch" : "class"}{selectedBatches.length === 1 ? "" : "es"}.
-                </p>
+                {isComp ? (
+                  <p className="text-sm text-slate-700">
+                    {recipients.length} student{recipients.length === 1 ? "" : "s"} in {selectedBatches.length} batch{selectedBatches.length === 1 ? "" : "es"}. Untick anyone who shouldn&apos;t get it.
+                  </p>
+                ) : (
+                  <p className="text-sm text-slate-700">
+                    <strong>{willReceive}</strong> message{willReceive === 1 ? "" : "s"} will be sent for {recipients.length} student
+                    {recipients.length === 1 ? "" : "s"} in {selectedBatches.length} class{selectedBatches.length === 1 ? "" : "es"}.
+                  </p>
+                )}
 
                 <div className="rounded-md bg-emerald-50 border border-emerald-100 px-3 py-2 text-sm text-emerald-900">
                   {renderTemplate(sampleBody, sampleParams(recipients[0]))}
                 </div>
 
+                {isComp ? (
+                  <CompRecipientPicker
+                    key={`${newTime}-${batchIds.join(",")}`}
+                    action={sendNotice}
+                    hidden={[
+                      { name: "type", value: type },
+                      { name: "date", value: dateStr },
+                      { name: "newTime", value: newTime },
+                      ...batchIds.map((id) => ({ name: "batchId", value: id })),
+                    ]}
+                    rows={recipients.map((r) => ({
+                      id: compPickKey(r),
+                      studentName: r.studentName,
+                      detail: `${r.courseName} · regular class ${clockLabel(r.startTime)}, comp ${clockLabel(newTime)}`,
+                      phones: r.phones,
+                    }))}
+                  />
+                ) : (
+                <>
                 <ul className="divide-y divide-slate-100 rounded-md border border-line max-h-80 overflow-y-auto">
                   {recipients.map((r) => (
                     <li key={`${r.studentId}-${r.batchId}`} className="px-3 py-2 flex items-start justify-between gap-3">
@@ -294,6 +321,8 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
                       Send {willReceive} message{willReceive === 1 ? "" : "s"} on WhatsApp
                     </ConfirmSubmitButton>
                   </form>
+                )}
+                </>
                 )}
                 {NOTICE_TYPES[type].suppressesReminder && (
                   <p className="text-xs text-slate-500">
