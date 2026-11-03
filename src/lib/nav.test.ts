@@ -8,7 +8,7 @@ describe("admin menu", () => {
     expect(labels(visibleNav(adminNav(), "ADMIN"))).toEqual([
       "Dashboard",
       "People[Leads,Students,Teachers,Users]",
-      "Classes[Attendance,Day schedule,Class changes,Batches,Courses]",
+      "Classes[Attendance,Teacher attendance,Day schedule,Class changes,Batches,Courses]",
       "Money[Billing,Expenses,Payroll,Profit & loss]",
       "WhatsApp[Overview,Inbox]",
       "Reports",
@@ -19,7 +19,7 @@ describe("admin menu", () => {
     expect(labels(visibleNav(adminNav(), "FRONT_DESK"))).toEqual([
       "Dashboard",
       "People[Leads,Students]",
-      "Classes[Attendance,Day schedule,Class changes,Batches]",
+      "Classes[Attendance,Teacher attendance,Day schedule,Class changes,Batches]",
       "Money[Billing,Expenses]",
       "Inbox",
     ]);

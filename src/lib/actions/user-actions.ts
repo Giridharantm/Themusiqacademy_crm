@@ -64,14 +64,15 @@ export async function updateTeacherStatus(teacherId: string, status: "ACTIVE" | 
 export async function deleteTeacher(teacherId: string) {
   await requireRole("ADMIN");
 
-  const [batches, homework, feedback, attendance] = await Promise.all([
+  const [batches, homework, feedback, attendance, ownAttendance] = await Promise.all([
     prisma.batch.count({ where: { teacherId } }),
     prisma.homework.count({ where: { teacherId } }),
     prisma.feedback.count({ where: { teacherId } }),
     prisma.attendance.count({ where: { markedById: teacherId } }),
+    prisma.teacherAttendance.count({ where: { teacherId } }),
   ]);
 
-  if (batches + homework + feedback + attendance > 0) {
+  if (batches + homework + feedback + attendance + ownAttendance > 0) {
     throw new Error("This teacher has batches or history attached — reassign their batches and deactivate the account instead of deleting it.");
   }
 

@@ -18,7 +18,7 @@ export default async function TeacherDetailPage({ params }: { params: Promise<{ 
     where: { id, role: "TEACHER" },
     include: {
       batchesTaught: { include: { course: true, _count: { select: { enrollments: { where: { student: { status: "ACTIVE" } } } } } }, orderBy: { name: "asc" } },
-      _count: { select: { homeworkGiven: true, feedbackGiven: true, attendanceMarked: true } },
+      _count: { select: { homeworkGiven: true, feedbackGiven: true, attendanceMarked: true, ownAttendance: true } },
     },
   });
 
@@ -29,7 +29,7 @@ export default async function TeacherDetailPage({ params }: { params: Promise<{ 
     orderBy: { name: "asc" },
   });
 
-  const historyCount = teacher._count.homeworkGiven + teacher._count.feedbackGiven + teacher._count.attendanceMarked;
+  const historyCount = teacher._count.homeworkGiven + teacher._count.feedbackGiven + teacher._count.attendanceMarked + teacher._count.ownAttendance;
   const canDelete = teacher.batchesTaught.length === 0 && historyCount === 0;
 
   return (

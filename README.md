@@ -85,13 +85,14 @@ An `INACTIVE` student never shows up in a batch's roster, its student count, or 
 
 ## Front desk logins
 
-A fourth role, `FRONT_DESK`, is for the person at the desk. The admin creates the logins on **Users** (`/admin/users`, admin only): name, email, phone and a password of 8+ characters (there is no default password); a login can be deactivated (it stops signing in at once, history stays) and given a new password. Front desk uses the same `/admin` screens with a shorter menu — Dashboard, Leads, Students, Attendance, Batches, Billing, Inbox.
+A fourth role, `FRONT_DESK`, is for the person at the desk. The admin creates the logins on **Users** (`/admin/users`, admin only): name, email, phone and a password of 8+ characters (there is no default password); a login can be deactivated (it stops signing in at once, history stays) and given a new password. Front desk uses the same `/admin` screens with a shorter menu — Dashboard, Leads, Students, Attendance, Teacher attendance, Batches, Billing, Inbox.
 
 | Area | Front desk can | Front desk cannot |
 |---|---|---|
 | Leads | add, update, log follow-ups, change status, convert to a student | delete a lead |
 | Students | view, add, edit learner logins (guardians), enrol in a batch (a new instrument's package is created at the standard price), renew or start a subscription, give bonus classes and "classes already used" when enrolling or renewing, mark active/inactive, follow-ups | delete an enrolment; edit, cancel or delete subscriptions; add past subscriptions; the WhatsApp reminders card; the CSV download |
 | Attendance | mark and correct | — |
+| Teacher attendance | mark and correct (`/admin/teacher-attendance`, see below) | — |
 | Batches | view (with seats taken) | create, edit, delete |
 | Class changes | book a skipped class or a make-up, cancel one | set class size or make-up rules (Courses, admin) |
 | Petty cash | add an expense under a petty-cash heading, and fix or delete their own entry the same day; see only petty cash entries | rent, salaries and the other admin headings, other people's entries, payroll, profit & loss |
@@ -108,7 +109,15 @@ It is enforced twice: `canAccessAdminPath()` in `src/lib/permissions.ts` (used b
 - **Edit** — name/email/phone.
 - **Reassign batches** — per-batch dropdown, or "Reassign ALL batches to" to move a full schedule to another teacher in one click. Useful before deactivating someone who's covering several classes.
 - **Deactivate / Reactivate** — the standard way to "remove" a teacher who has history (batches, homework, feedback, or attendance they've marked). Deactivating disables their login (checked in `src/lib/auth.ts`'s `authorize()`) without touching any of that history or its attribution. Deactivated teachers also drop out of the "Teacher" dropdown when creating new batches (`/admin/batches` only offers `status: "ACTIVE"` teachers), but stay assigned to whatever they already had — reassign those explicitly if you want them cleared.
-- **Delete** — only offered when the account has zero batches and zero history (checked in `deleteTeacher()` in `src/lib/actions/user-actions.ts`); otherwise it's blocked with an explanation to reassign + deactivate instead. This is for accounts created by mistake, not real removal of a teacher who's taught.
+- **Delete** — only offered when the account has zero batches and zero history (checked in `deleteTeacher()` in `src/lib/actions/user-actions.ts`); otherwise it's blocked with an explanation to reassign + deactivate instead. This is for accounts created by mistake, not real removal of a teacher who's taught. Their own attendance records count as history here too.
+
+### Teacher attendance
+
+Admin and front desk keep each teacher's own attendance on **Teacher attendance** (`/admin/teacher-attendance`, under Classes). It is a day at a time (previous/next day or a date picker; future days can't be marked) listing every active teacher with that weekday's regular classes beside their name. For each teacher you choose **Present** or **Absent**, the **time they came in** (defaults to the current IST time on today's page; required for Present, dropped for Absent) and **Notes** (up to 500 characters; this is where a comp class or the reason for an absence goes, e.g. "taking a comp class for Aarav"). Saving again corrects the entry and **Clear this mark** removes it; each row shows who marked it.
+
+Teachers read their own record on **My attendance** (`/teacher/my-attendance`), one month at a time with present/absent totals: the day, the time they came in, and the note. They only ever see their own rows and cannot edit them.
+
+Stored in `TeacherAttendance` (one row per teacher per day, unique on `teacherId` + `date`, with `status`, `time` as `HH:MM` IST, `note`, `markedById`). The rules (what a valid entry is, month bounds, totals) are in `src/lib/teacher-attendance.ts`; the two actions are in `src/lib/actions/teacher-attendance-actions.ts`, open to `ADMIN` and `FRONT_DESK`. It is separate from student attendance, which is unchanged.
 
 ## Class packages & renewals
 

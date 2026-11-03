@@ -24,6 +24,7 @@ export function adminNav(unreadInbox = 0): NavItem[] {
       label: "Classes",
       items: [
         { href: "/admin/attendance", label: "Attendance" },
+        { href: "/admin/teacher-attendance", label: "Teacher attendance" },
         { href: "/admin/schedule", label: "Day schedule" },
         { href: "/admin/changes", label: "Class changes" },
         { href: "/admin/batches", label: "Batches" },

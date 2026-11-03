@@ -5,6 +5,7 @@ import { currentUser } from "@/lib/authz";
 const links = [
   { href: "/teacher", label: "My Batches" },
   { href: "/teacher/attendance", label: "Attendance" },
+  { href: "/teacher/my-attendance", label: "My attendance" },
   { href: "/teacher/payslips", label: "Payslips" },
 ];
 

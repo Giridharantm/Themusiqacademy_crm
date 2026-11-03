@@ -11,7 +11,7 @@ export type AppRole = "ADMIN" | "TEACHER" | "PARENT" | "FRONT_DESK";
 // Roles that work in the admin area.
 export const STAFF_ROLES = ["ADMIN", "FRONT_DESK"] as const;
 
-const FRONT_DESK_AREAS = ["/admin/leads", "/admin/students", "/admin/attendance", "/admin/schedule", "/admin/changes", "/admin/expenses", "/admin/batches", "/admin/billing", "/admin/whatsapp/inbox"];
+const FRONT_DESK_AREAS = ["/admin/leads", "/admin/students", "/admin/attendance", "/admin/teacher-attendance", "/admin/schedule", "/admin/changes", "/admin/expenses", "/admin/batches", "/admin/billing", "/admin/whatsapp/inbox"];
 
 // Download links for whole-student lists would hand the full contact book to
 // anyone with a login, so they stay with the admin.

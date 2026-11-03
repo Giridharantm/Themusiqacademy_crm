@@ -88,10 +88,13 @@ model User {
   createdAt         DateTime  @default(now())
 
   // Teacher relations
-  batchesTaught    Batch[]      @relation("TeacherBatches")
-  homeworkGiven    Homework[]   @relation("TeacherHomework")
-  feedbackGiven    Feedback[]   @relation("TeacherFeedback")
-  attendanceMarked Attendance[] @relation("MarkedByTeacher")
+  batchesTaught           Batch[]             @relation("TeacherBatches")
+  homeworkGiven           Homework[]          @relation("TeacherHomework")
+  feedbackGiven           Feedback[]          @relation("TeacherFeedback")
+  attendanceMarked        Attendance[]        @relation("MarkedByTeacher")
+  // A teacher's own attendance (kept by the front desk / admin), and the entries this person marked
+  ownAttendance           TeacherAttendance[] @relation("TeacherAttendanceOf")
+  teacherAttendanceMarked TeacherAttendance[] @relation("TeacherAttendanceMarkedBy")
 
   // Admin/staff relations
   leadsAssigned        Lead[]            @relation("AssignedStaff")
@@ -318,6 +321,26 @@ model Attendance {
   createdAt  DateTime         @default(now())
 
   @@unique([studentId, courseId, date])
+}
+
+// A teacher's own attendance for a day — marked by admin or front desk, shown back to the
+// teacher. One record per teacher per day; `time` is when they came in (HH:MM, IST) and
+// `note` carries anything worth saying, e.g. "taking a comp class for Aarav".
+model TeacherAttendance {
+  id         String           @id @default(cuid())
+  teacherId  String
+  teacher    User             @relation("TeacherAttendanceOf", fields: [teacherId], references: [id])
+  date       DateTime
+  status     AttendanceStatus
+  time       String?
+  note       String?
+  markedById String?
+  markedBy   User?            @relation("TeacherAttendanceMarkedBy", fields: [markedById], references: [id])
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([teacherId, date])
+  @@index([date])
 }
 
 model Homework {

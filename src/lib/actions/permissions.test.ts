@@ -27,6 +27,7 @@ const FRONT_DESK_OK: Record<string, string[]> = {
   "class-change-actions.ts": ["bookClassChange", "cancelClassChange"],
   "expense-actions.ts": ["createExpense", "updateExpense", "deleteExpense"],
   "attendance-actions.ts": ["markStudentPresentAsAdmin", "unmarkStudentAsAdmin", "markAttendanceOnDateAsAdmin", "removeAttendanceOnDateAsAdmin"],
+  "teacher-attendance-actions.ts": ["markTeacherAttendance", "clearTeacherAttendance"],
   "billing-actions.ts": ["recordStudentPayment", "raiseInvoiceFromPayments", "recordPayment"],
   "whatsapp-actions.ts": ["sendInboxReply", "markInboxRead", "markNumberAsSpam", "unblockNumberAction"],
 };
