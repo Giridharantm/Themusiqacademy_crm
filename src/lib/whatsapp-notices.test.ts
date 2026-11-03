@@ -25,6 +25,7 @@ import {
   TEMPLATE_BODIES,
   TEMPLATE_REMINDER,
   TEMPLATE_REMINDER_PROGRESS,
+  TEMPLATE_REMINDER_BUTTONS,
   reminderMessage,
   TEMPLATE_NOTICE,
   TEMPLATE_RESCHEDULED,
@@ -260,6 +261,13 @@ describe("comp class notice", () => {
     const m = compReminderMessage({ studentName: "Aditi", courseName: "Carnatic" }, "17:30");
     expect(m).toEqual({ template: TEMPLATE_REMINDER, params: ["Aditi", "Carnatic comp", "5:30 PM"] });
     expect(renderTemplate(TEMPLATE_BODIES[m.template], m.params)).toBe("Hello! A reminder from The Musiq Academy: Aditi's Carnatic comp class is today at 5:30 PM. See you at the academy!");
+  });
+
+  it("ends with the Yes / No buttons when button payloads are given", () => {
+    const m = compReminderMessage({ studentName: "Aditi", courseName: "Carnatic" }, "17:30", ["cyes|s|b|2026-11-03", "cno|s|b|2026-11-03"]);
+    expect(m.template).toBe(TEMPLATE_REMINDER_BUTTONS);
+    expect(m.buttonPayloads).toHaveLength(2);
+    expect(renderTemplate(TEMPLATE_BODIES[m.template], m.params)).toContain("comp class is today at 5:30 PM. Will you be able to attend?");
   });
 
   it("does not hold back the regular reminder", () => {

@@ -223,6 +223,7 @@ model Student {
   followUps     StudentFollowUp[]
   reminderSkips ReminderSkip[]
   classChanges  ClassChange[]
+  confirmations ClassConfirmation[]
 }
 
 model StudentGuardian {
@@ -663,4 +664,33 @@ model PayslipLine {
   amount    Float
   kind      PayslipLineKind
   createdAt DateTime        @default(now())
+}
+
+enum ConfirmKind {
+  REGULAR // the reminder for a student's regular class
+  COMP // a comp class notice
+}
+
+enum ConfirmAnswer {
+  YES
+  NO
+}
+
+// A family's "Yes, I'll attend" / "No, can't attend" tap on a reminder or comp
+// class message, one row per student + class + date + kind (the latest tap
+// wins). This is how staff see who has confirmed; it changes nothing else:
+// skips and make-ups are still booked as ClassChange rows.
+model ClassConfirmation {
+  id         String        @id @default(cuid())
+  studentId  String
+  student    Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batchId    String // the student's regular batch the message was about
+  date       DateTime // date-only: the class day
+  kind       ConfirmKind
+  answer     ConfirmAnswer
+  phone      String
+  answeredAt DateTime      @default(now())
+
+  @@unique([studentId, batchId, date, kind])
+  @@index([date])
 }

@@ -7,6 +7,8 @@ import type { SlotOption } from "@/lib/reschedule";
 export type ClassReply =
   | { kind: "yes"; studentId: string; batchId: string; date: string } // "Yes, I'll attend" on the reminder
   | { kind: "no"; studentId: string; batchId: string; date: string } // "No, can't attend" on the reminder
+  | { kind: "cyes"; studentId: string; batchId: string; date: string } // "Yes, I'll attend" on a comp class message (batchId: the regular batch it makes up for)
+  | { kind: "cno"; studentId: string; batchId: string; date: string } // "No, can't attend" on a comp class message
   | { kind: "move"; studentId: string; batchId: string; date: string } // "Reschedule", asked after a No
   | { kind: "cancel"; studentId: string; batchId: string; date: string } // "Cancel class", asked after a No
   | { kind: "slot"; studentId: string; batchId: string; date: string; toBatchId: string; toDate: string } // a row chosen from the list
@@ -22,7 +24,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export function parseReplyId(id: string): ClassReply | null {
   const [kind, studentId, batchId, date, toBatchId, toDate] = id.split("|");
   if (!studentId || !batchId || !DATE.test(date ?? "")) return null;
-  if (kind === "yes" || kind === "no" || kind === "move" || kind === "cancel" || kind === "nomove") return { kind, studentId, batchId, date };
+  if (kind === "yes" || kind === "no" || kind === "cyes" || kind === "cno" || kind === "move" || kind === "cancel" || kind === "nomove") return { kind, studentId, batchId, date };
   if (kind === "slot" && toBatchId && DATE.test(toDate ?? "")) return { kind, studentId, batchId, date, toBatchId, toDate };
   return null;
 }
@@ -101,6 +103,13 @@ export function confirmedText(studentName: string, courseName: string, slot: { d
 export function attendingText(studentName: string, startTime: string) {
   return `Great, see you at ${clockLabel(startTime)}! Have a lovely class. - The Musiq Academy`;
 }
+
+export function compAttendingText(startTime: string | null) {
+  return `Great, see you ${startTime ? `at ${clockLabel(startTime)}` : "then"} for the comp class! - The Musiq Academy`;
+}
+
+export const compDeclinedText = (studentName: string) =>
+  `Noted: ${studentName} won't be at the comp class. Thank you for letting us know. - The Musiq Academy`;
 
 export const REPLY_BUTTON_RESCHEDULE = "Reschedule";
 export const REPLY_BUTTON_CANCEL = "Cancel the class";

@@ -34,13 +34,14 @@ export default async function DaySchedulePage({ searchParams }: { searchParams: 
     : [];
   const batchIds = batches.map((b) => b.id);
 
-  const [enrollments, changes, attendance] = await Promise.all([
+  const [enrollments, changes, attendance, confirmations] = await Promise.all([
     prisma.enrollment.findMany({ where: { status: "ACTIVE", student: { status: "ACTIVE" }, batchId: { in: batchIds } }, include: { student: true } }),
     prisma.classChange.findMany({
       where: { status: "BOOKED", student: { status: "ACTIVE" }, OR: [{ fromBatchId: { in: batchIds }, fromDate: date }, { toBatchId: { in: batchIds }, toDate: date }] },
       include: { student: true, toBatch: true },
     }),
     prisma.attendance.findMany({ where: { date, status: "PRESENT", courseId: { in: batches.map((b) => b.courseId) } }, select: { studentId: true, courseId: true } }),
+    prisma.classConfirmation.findMany({ where: { date, kind: "REGULAR", batchId: { in: batchIds } }, select: { studentId: true, batchId: true, answer: true } }),
   ]);
 
   const slots = buildDaySchedule({
@@ -66,11 +67,17 @@ export default async function DaySchedulePage({ searchParams }: { searchParams: 
       toLabel: c.toBatch && c.toDate ? `${format(c.toDate, "EEE d MMM")} ${formatTimeLabel(c.toBatch.startTime)}` : null,
     })),
     presentKeys: new Set(attendance.map((a) => `${a.studentId}|${a.courseId}`)),
+    answers: new Map(confirmations.map((c) => [`${c.studentId}|${c.batchId}`, c.answer])),
   });
 
   const shown = slots.filter((s) => sp.empty || s.students.length > 0 || s.away.length > 0);
   const byTime = shown.reduce<Map<string, typeof shown>>((m, s) => m.set(s.batch.startTime, [...(m.get(s.batch.startTime) ?? []), s]), new Map());
   const total = shown.reduce((n, s) => n + s.students.length, 0);
+  const regular = shown.flatMap((s) => s.students).filter((st) => !st.makeUp);
+  const confirmed = regular.filter((st) => st.reply === "YES").length;
+  const saidNo = regular.filter((st) => st.reply === "NO").length;
+  // Reminders go out on the day itself, so only then is "no reply" meaningful.
+  const reminded = key <= dateKey(today);
 
   return (
     <div>
@@ -122,6 +129,13 @@ export default async function DaySchedulePage({ searchParams }: { searchParams: 
         <div className="space-y-6">
           <p className="text-sm text-slate-500">
             {total} student{total === 1 ? "" : "s"} expected across {shown.length} slot{shown.length === 1 ? "" : "s"}
+            {(confirmed > 0 || saidNo > 0 || reminded) && (
+              <>
+                {" "}
+                · <span className="text-emerald-700">{confirmed} confirmed</span> · <span className="text-red-700">{saidNo} said no</span>
+                {reminded ? ` · ${regular.length - confirmed - saidNo} no reply yet` : ""}
+              </>
+            )}
           </p>
           {Array.from(byTime.entries()).map(([time, group]) => (
             <Card key={time}>
@@ -149,6 +163,8 @@ export default async function DaySchedulePage({ searchParams }: { searchParams: 
                             <li key={st.id} className={`text-xs rounded-full border px-2.5 py-1 ${st.makeUp ? "bg-amber-50 border-amber-200 text-amber-800" : "bg-slate-50 border-slate-200 text-slate-700"}`}>
                               <Link href={`/admin/students/${st.id}`} className="hover:underline">{st.name}</Link>
                               {st.makeUp ? " · make-up" : ""}
+                              {st.reply === "YES" && <span className="text-emerald-700"> · confirmed</span>}
+                              {st.reply === "NO" && <span className="text-red-700"> · said no</span>}
                               {st.present ? " ✓" : ""}
                             </li>
                           ))}
@@ -165,7 +181,7 @@ export default async function DaySchedulePage({ searchParams }: { searchParams: 
               </ul>
             </Card>
           ))}
-          <p className="text-xs text-slate-400">✓ = marked present. Amber = here for a make-up class.</p>
+          <p className="text-xs text-slate-400">✓ = marked present. Amber = here for a make-up class. &ldquo;confirmed&rdquo; / &ldquo;said no&rdquo; = their answer to the WhatsApp reminder.</p>
         </div>
       )}
     </div>

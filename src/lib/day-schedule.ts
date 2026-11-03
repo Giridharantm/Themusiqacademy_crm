@@ -24,7 +24,8 @@ export type DayChange = {
   toLabel: string | null; // e.g. "Wed 4 Nov 6:00 PM", for the "moved to" note
 };
 
-export type DaySlotStudent = { id: string; name: string; present: boolean; makeUp: boolean };
+// reply: what the family answered to the reminder's Yes / No buttons (null: not answered, or a make-up, which has no buttons).
+export type DaySlotStudent = { id: string; name: string; present: boolean; makeUp: boolean; reply: "YES" | "NO" | null };
 export type DaySlotAway = { id: string; name: string; detail: string };
 
 export type DaySlot = {
@@ -41,6 +42,7 @@ export function buildDaySchedule(input: {
   enrollments: { batchId: string; studentId: string; studentName: string }[];
   changes: DayChange[];
   presentKeys: Set<string>; // `${studentId}|${courseId}` marked present today
+  answers?: Map<string, "YES" | "NO">; // `${studentId}|${batchId}` -> the family's answer to the reminder
 }): DaySlot[] {
   const { dateKey, changes } = input;
   const away = changes.filter((c) => c.fromDateKey === dateKey);
@@ -55,10 +57,10 @@ export function buildDaySchedule(input: {
       const students: DaySlotStudent[] = [
         ...input.enrollments
           .filter((e) => e.batchId === batch.id && !awayIds.has(e.studentId))
-          .map((e) => ({ id: e.studentId, name: e.studentName, present: present(e.studentId), makeUp: false })),
+          .map((e) => ({ id: e.studentId, name: e.studentName, present: present(e.studentId), makeUp: false, reply: input.answers?.get(`${e.studentId}|${batch.id}`) ?? null })),
         ...coming
           .filter((c) => c.toBatchId === batch.id)
-          .map((c) => ({ id: c.studentId, name: c.studentName, present: present(c.studentId), makeUp: true })),
+          .map((c) => ({ id: c.studentId, name: c.studentName, present: present(c.studentId), makeUp: true, reply: null })),
       ].sort((a, b) => a.name.localeCompare(b.name));
 
       return {

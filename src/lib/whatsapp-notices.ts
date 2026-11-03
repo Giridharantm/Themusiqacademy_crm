@@ -295,11 +295,17 @@ export function reminderRunDue(now: Date, reminderTime: string, lastRunDate: str
 
 // A comp class is a make-up given when a teacher was off. It goes out in the
 // daily reminder's wording ("<student>'s <instrument> comp class is today at
-// <time>") on the same approved template, with "comp" added so families can
-// tell it from their regular class. No buttons and no progress count: it isn't
-// a regular class to attend or cancel.
-export function compReminderMessage(r: { studentName: string; courseName: string }, time: string): { template: string; params: string[] } {
-  return { template: TEMPLATE_REMINDER, params: [r.studentName, `${r.courseName} comp`, clockLabel(time)] };
+// <time>") on the same approved templates, with "comp" added so families can
+// tell it from their regular class. No progress count. With buttonPayloads it is
+// the version ending "Will you be able to attend?" with the Yes / No buttons, so
+// staff can see who has confirmed.
+export function compReminderMessage(
+  r: { studentName: string; courseName: string },
+  time: string,
+  buttonPayloads?: string[]
+): { template: string; params: string[]; buttonPayloads?: string[] } {
+  const params = [r.studentName, `${r.courseName} comp`, clockLabel(time)];
+  return buttonPayloads ? { template: TEMPLATE_REMINDER_BUTTONS, params, buttonPayloads } : { template: TEMPLATE_REMINDER, params };
 }
 
 // What identifies one comp class message on the preview and in the form: the student and the instrument.
@@ -316,11 +322,11 @@ export function dedupeCompRecipients<T extends { studentId: string; courseName: 
   });
 }
 
-export type ReminderFilter = { course?: string; time?: string; status?: string; q?: string };
+export type ReminderFilter = { course?: string; time?: string; status?: string; reply?: string; q?: string };
 
 // Narrows the Class reminders list: instrument, class time, outcome (will be
 // sent / why not) and a search on the student's name or phone number.
-export function filterReminderRows<T extends { studentName: string; courseName: string; startTime: string; phone: string | null; decision: ReminderDecision }>(
+export function filterReminderRows<T extends { studentName: string; courseName: string; startTime: string; phone: string | null; decision: ReminderDecision; replyStatus?: string | null }>(
   rows: T[],
   f: ReminderFilter
 ): T[] {
@@ -332,6 +338,7 @@ export function filterReminderRows<T extends { studentName: string; courseName: 
     if (f.course && r.courseName !== f.course) return false;
     if (f.time && r.startTime !== f.time) return false;
     if (f.status && r.decision !== f.status) return false;
+    if (f.reply && (r.replyStatus ?? "") !== f.reply) return false;
     if (q) {
       const nameHit = r.studentName.toLowerCase().includes(q);
       const phoneHit = !!qDigits && !!r.phone && r.phone.replace(/\D/g, "").includes(qDigits);

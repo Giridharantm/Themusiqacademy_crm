@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/attendance";
 import { sendNotice } from "@/lib/actions/whatsapp-actions";
-import { batchesOnDate, recipientsForBatches } from "@/lib/whatsapp-service";
+import { batchesOnDate, getReminderButtons, recipientsForBatches } from "@/lib/whatsapp-service";
 import { DAY_LABELS, OPERATING_DAYS } from "@/lib/schedule";
 import {
   NOTICE_TYPES,
@@ -10,6 +10,7 @@ import {
   TEMPLATE_BODIES,
   TEMPLATE_NOTICE,
   TEMPLATE_REMINDER,
+  TEMPLATE_REMINDER_BUTTONS,
   TEMPLATE_RESCHEDULED,
   clockLabel,
   compPickKey,
@@ -92,7 +93,9 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
       : isReschedule
         ? [r.studentName, r.courseName, `${shortDateLabel(date)}, ${clockLabel(r.startTime)}`, newDateStr && newTime ? `${shortDateLabel(parseDateOnly(newDateStr))}, ${clockLabel(newTime)}` : ""]
         : [r.studentName, r.courseName, shortDateLabel(date), message];
-  const sampleBody = TEMPLATE_BODIES[isComp ? TEMPLATE_REMINDER : isReschedule ? TEMPLATE_RESCHEDULED : TEMPLATE_NOTICE];
+  // With buttons on, a comp class message ends "Will you be able to attend?" with Yes / No buttons.
+  const compButtons = isComp && (await getReminderButtons());
+  const sampleBody = TEMPLATE_BODIES[isComp ? (compButtons ? TEMPLATE_REMINDER_BUTTONS : TEMPLATE_REMINDER) : isReschedule ? TEMPLATE_RESCHEDULED : TEMPLATE_NOTICE];
 
   return (
     <div>
@@ -123,7 +126,7 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
                 <>
                   <input type="hidden" name="date" value={today} />
                   <p className="text-xs text-slate-500">
-                    Goes out in the daily reminder wording &mdash; &ldquo;&hellip;&apos;s Carnatic comp class is today at &hellip;&rdquo; &mdash; to the regular students of the batches you tick, for a class held today ({shortDateLabel(date)}).
+                    Goes out in the daily reminder wording &mdash; &ldquo;&hellip;&apos;s Carnatic comp class is today at &hellip;&rdquo; &mdash; to the regular students of the batches you tick, for a class held today ({shortDateLabel(date)}). With reminder buttons on, families can tap Yes or No, and you see who confirmed on the Class reminders page.
                   </p>
                   <Select label="Comp class starts at" name="newTime" defaultValue={newTime}>
                     <option value="">Choose…</option>

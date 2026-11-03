@@ -33,6 +33,16 @@ describe("buildDaySchedule", () => {
     ]);
   });
 
+  it("shows each student's answer to the reminder, and none for a make-up", () => {
+    const answers = new Map<string, "YES" | "NO">([["asha|g5", "YES"], ["ben|g5", "NO"], ["ben|g6", "YES"]]);
+    const slots = buildDaySchedule({ dateKey: "2026-11-03", batches, enrollments: enrolled, changes: [], presentKeys: new Set(), answers });
+    expect(slots.find((s) => s.batch.id === "g5")!.students.map((s) => `${s.name}:${s.reply}`)).toEqual(["Asha:YES", "Ben:NO"]);
+    expect(slots.find((s) => s.batch.id === "g6")!.students.map((s) => s.reply)).toEqual([null]);
+
+    const moved = buildDaySchedule({ dateKey: "2026-11-03", batches, enrollments: enrolled, changes: [move], presentKeys: new Set(), answers });
+    expect(moved.find((s) => s.batch.id === "g6")!.students.find((s) => s.name === "Ben")).toMatchObject({ makeUp: true, reply: null });
+  });
+
   it("moves a student out of their regular slot and into the make-up slot for that date only", () => {
     const slots = buildDaySchedule({ dateKey: "2026-11-03", batches, enrollments: enrolled, changes: [move], presentKeys: new Set() });
     const five = slots.find((s) => s.batch.id === "g5")!;

@@ -9,6 +9,8 @@ import {
   REPLY_BUTTON_CANCEL,
   REPLY_BUTTON_RESCHEDULE,
   attendingText,
+  compAttendingText,
+  compDeclinedText,
   callUsText,
   confirmedText,
   parseReplyId,
@@ -21,6 +23,16 @@ import {
 import { makeUpDeadline } from "@/lib/reschedule";
 import { recipientPhones, shortDateLabel } from "@/lib/whatsapp-notices";
 import { sendButtonsReply, sendListReply, sendReply } from "@/lib/whatsapp-service";
+
+// Remembers a family's Yes / No so staff can see who has confirmed. The latest tap wins.
+async function recordConfirmation(studentId: string, batchId: string, dateStr: string, kind: "REGULAR" | "COMP", answer: "YES" | "NO", phone: string) {
+  const key = { studentId, batchId, date: parseDateOnly(dateStr), kind };
+  await prisma.classConfirmation.upsert({
+    where: { studentId_batchId_date_kind: key },
+    create: { ...key, answer, phone },
+    update: { answer, phone, answeredAt: new Date() },
+  });
+}
 
 // Returns true when the tap was ours to handle (so the webhook stops there).
 export async function handleClassReply(phone: string, msgId: string, id: string): Promise<boolean> {
@@ -65,9 +77,21 @@ export async function handleClassReply(phone: string, msgId: string, id: string)
 
   switch (reply.kind) {
     case "yes":
+      await recordConfirmation(student.id, batch.id, reply.date, "REGULAR", "YES", phone);
       await say(attendingText(student.name, batch.startTime), 1);
       return true;
+    case "cyes": {
+      await recordConfirmation(student.id, batch.id, reply.date, "COMP", "YES", phone);
+      const notice = await prisma.notice.findFirst({ where: { type: "COMP_CLASS", date: missed.date, batchIds: { has: batch.id } }, orderBy: { createdAt: "desc" }, select: { newStartTime: true } });
+      await say(compAttendingText(notice?.newStartTime ?? null), 1);
+      return true;
+    }
+    case "cno":
+      await recordConfirmation(student.id, batch.id, reply.date, "COMP", "NO", phone);
+      await say(compDeclinedText(student.name), 1);
+      return true;
     case "no":
+      await recordConfirmation(student.id, batch.id, reply.date, "REGULAR", "NO", phone);
       await sendButtonsReply(
         phone,
         whatNextText(student.name, course, batch.startTime),

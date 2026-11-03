@@ -29,6 +29,7 @@ import {
 } from "@/lib/whatsapp-notices";
 import { sendButtons, sendList, sendTemplate, sendText, setWhatsAppBlock, whatsappConfigured } from "@/lib/whatsapp-send";
 import { replyId, type ListRow } from "@/lib/class-reply";
+import { replyStatus, type ReplyStatus } from "@/lib/class-confirm";
 import { cleanReplyText, isReplyWindowOpen, isUnread } from "@/lib/whatsapp-inbox";
 import { attendanceForSubscription, countUsedClasses, subscriptionTotals } from "@/lib/subscription";
 
@@ -295,6 +296,8 @@ export type ReminderPlanRow = {
   // What happened if a reminder for this row has already been tried.
   sentStatus: "PENDING" | "SENT" | "FAILED" | "DRY_RUN" | null;
   error: string | null;
+  // What the family answered (confirmed / can't come / rescheduled / no reply yet); null until the reminder has gone out.
+  replyStatus: ReplyStatus | null;
 };
 
 export type ReminderPlan = { dateStr: string; isClassDay: boolean; rows: ReminderPlanRow[]; classes: number; noticeBatches: number };
@@ -343,6 +346,7 @@ export async function planReminders(dateStr: string): Promise<ReminderPlan> {
         }),
         sentStatus: null,
         error: null,
+        replyStatus: null,
       });
     }
   }
@@ -356,6 +360,19 @@ export async function planReminders(dateStr: string): Promise<ReminderPlan> {
       row.error = m.error;
     }
   }
+  const studentIds = Array.from(new Set(rows.map((r) => r.studentId)));
+  const [confirmations, changes] = await Promise.all([
+    prisma.classConfirmation.findMany({ where: { date, kind: "REGULAR", studentId: { in: studentIds } }, select: { studentId: true, batchId: true, answer: true } }),
+    prisma.classChange.findMany({ where: { fromDate: date, status: "BOOKED", studentId: { in: studentIds } }, select: { studentId: true, fromBatchId: true, kind: true } }),
+  ]);
+  const answerOf = new Map(confirmations.map((c) => [`${c.studentId}|${c.batchId}`, c.answer]));
+  const changeOf = new Map(changes.map((c) => [`${c.studentId}|${c.fromBatchId}`, c.kind]));
+  for (const row of rows) {
+    // A make-up booking gets no buttons, so there is nothing for its family to answer.
+    if (row.makeUp) continue;
+    const k = `${row.studentId}|${row.batchId}`;
+    row.replyStatus = replyStatus({ sent: row.sentStatus === "SENT", answer: answerOf.get(k) ?? null, change: changeOf.get(k) ?? null });
+  }
   return { dateStr, isClassDay: true, rows, classes: batches.length, noticeBatches: noticeBatches.size };
 }
 
@@ -363,6 +380,12 @@ export async function planReminders(dateStr: string): Promise<ReminderPlan> {
 export function reminderButtonPayloads(row: { studentId: string; batchId: string }, dateStr: string): string[] {
   const base = { studentId: row.studentId, batchId: row.batchId, date: dateStr };
   return [replyId({ kind: "yes", ...base }), replyId({ kind: "no", ...base })];
+}
+
+// What a comp class message's two buttons send back (the regular batch it makes up for, and today).
+export function compButtonPayloads(row: { studentId: string; batchId: string }, dateStr: string): string[] {
+  const base = { studentId: row.studentId, batchId: row.batchId, date: dateStr };
+  return [replyId({ kind: "cyes", ...base }), replyId({ kind: "cno", ...base })];
 }
 
 export type ReminderRun =
@@ -481,6 +504,7 @@ export async function createAndSendNotice(input: NoticeInput): Promise<{ noticeI
     ? dedupeCompRecipients((await recipientsForBatches(batchIds)).filter((r) => input.picks!.includes(compPickKey(r))))
     : await recipientsForBatches(batchIds, parseDateOnly(dateStr));
   const tally = emptyTally();
+  const buttons = isComp && (await getReminderButtons());
   for (const r of recipients) {
     for (const { phone, consented } of r.phones) {
       if (!consented) {
@@ -490,7 +514,7 @@ export async function createAndSendNotice(input: NoticeInput): Promise<{ noticeI
       const oldSlot = `${shortDateLabel(date)}, ${clockLabel(r.startTime)}`;
       const newSlot = isReschedule ? `${shortDateLabel(parseDateOnly(input.newDateStr!))}, ${clockLabel(input.newStartTime!)}` : "";
       const message = isComp
-        ? compReminderMessage(r, input.newStartTime!)
+        ? compReminderMessage(r, input.newStartTime!, buttons ? compButtonPayloads(r, dateStr) : undefined)
         : {
             template: isReschedule ? TEMPLATE_RESCHEDULED : TEMPLATE_NOTICE,
             params: isReschedule ? [r.studentName, r.courseName, oldSlot, newSlot] : [r.studentName, r.courseName, shortDateLabel(date), input.message],
@@ -514,6 +538,56 @@ export async function createAndSendNotice(input: NoticeInput): Promise<{ noticeI
   return { noticeId: notice.id, ...tally };
 }
 
+
+export type CompClassRow = { studentId: string; studentName: string; courseName: string; phones: string[]; status: ReplyStatus | "FAILED"; answeredAt: Date | null };
+export type CompClassSent = { noticeId: string; time: string; sentAt: Date | null; rows: CompClassRow[] };
+
+// The comp class messages sent for a class date, with each student's answer, so
+// staff can see who has confirmed.
+export async function compClassesSent(dateStr: string): Promise<CompClassSent[]> {
+  const date = parseDateOnly(dateStr);
+  const notices = await prisma.notice.findMany({ where: { type: "COMP_CLASS", date, sentAt: { not: null } }, orderBy: { createdAt: "asc" } });
+  if (notices.length === 0) return [];
+
+  const messages = await prisma.whatsAppMessage.findMany({
+    where: { noticeId: { in: notices.map((n) => n.id) }, kind: "NOTICE", studentId: { not: null } },
+    select: { noticeId: true, studentId: true, phone: true, status: true, dedupeKey: true },
+  });
+  const studentIds = Array.from(new Set(messages.map((m) => m.studentId!)));
+  const [students, confirmations, batches] = await Promise.all([
+    prisma.student.findMany({ where: { id: { in: studentIds } }, select: { id: true, name: true } }),
+    prisma.classConfirmation.findMany({ where: { date, kind: "COMP", studentId: { in: studentIds } } }),
+    prisma.batch.findMany({ where: { id: { in: notices.flatMap((n) => n.batchIds) } }, select: { id: true, course: { select: { name: true } } } }),
+  ]);
+  const nameOf = new Map(students.map((s) => [s.id, s.name]));
+  const courseOf = new Map(batches.map((b) => [b.id, b.course.name]));
+  const answerOf = new Map(confirmations.map((c) => [`${c.studentId}|${c.batchId}`, c]));
+
+  return notices.map((n) => {
+    // One row per student and class; the batch is the third part of the message key "notice:<id>:<student>:<batch>:<phone>".
+    const byClass = new Map<string, typeof messages>();
+    for (const m of messages.filter((m) => m.noticeId === n.id)) {
+      const batchId = m.dedupeKey.split(":")[3];
+      byClass.set(`${m.studentId}|${batchId}`, [...(byClass.get(`${m.studentId}|${batchId}`) ?? []), m]);
+    }
+    const rows = Array.from(byClass.entries())
+      .map(([key, msgs]): CompClassRow => {
+        const studentId = msgs[0].studentId!;
+        const c = answerOf.get(key);
+        const delivered = msgs.some((m) => m.status !== "FAILED");
+        return {
+          studentId,
+          studentName: nameOf.get(studentId) ?? "Student",
+          courseName: courseOf.get(key.split("|")[1]) ?? "",
+          phones: msgs.map((m) => m.phone),
+          status: !delivered ? "FAILED" : replyStatus({ sent: true, answer: c?.answer ?? null, change: null })!,
+          answeredAt: c?.answeredAt ?? null,
+        };
+      })
+      .sort((a, b) => a.courseName.localeCompare(b.courseName) || a.studentName.localeCompare(b.studentName));
+    return { noticeId: n.id, time: n.newStartTime ?? "", sentAt: n.sentAt, rows };
+  });
+}
 
 // A plain-text reply inside the 24 hours after the customer wrote to us (used
 // to confirm STOP / START). Logged like everything else we send.

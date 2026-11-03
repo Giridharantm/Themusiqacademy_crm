@@ -29,6 +29,12 @@ export async function sendNotice(formData: FormData) {
   });
 
   revalidatePath("/admin/whatsapp");
+  revalidatePath("/admin/whatsapp/reminders");
+  // A comp class is followed up on the Class reminders page, where who has confirmed is listed.
+  if (type === "COMP_CLASS") {
+    const comp = new URLSearchParams({ date: String(formData.get("date") ?? ""), compOk: String(result.sent), compFailed: String(result.failed) });
+    redirect(`/admin/whatsapp/reminders?${comp.toString()}`);
+  }
   const q = new URLSearchParams({
     sent: result.noticeId,
     ok: String(result.sent),
