@@ -17,7 +17,7 @@ export function AppShell({
 }) {
   return (
     <div className="min-h-screen bg-page print:bg-white">
-      <header className="relative bg-brand border-b border-gold/40 shadow-[0_10px_26px_-18px_rgba(28,26,35,0.7)] print:hidden">
+      <header className="sticky top-0 z-40 bg-brand border-b border-gold/40 shadow-[0_10px_26px_-18px_rgba(28,26,35,0.7)] print:hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
           <div className="flex items-center gap-4 xl:gap-8 min-w-0">
             <BrandLockup />
