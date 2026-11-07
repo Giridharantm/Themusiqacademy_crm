@@ -6,7 +6,7 @@ import { batchesOnDate, getReminderButtons, recipientsForBatches } from "@/lib/w
 import { DAY_LABELS, OPERATING_DAYS } from "@/lib/schedule";
 import {
   NOTICE_TYPES,
-  NOTICE_TYPE_KEYS,
+  CLASS_NOTICE_TYPE_KEYS,
   TEMPLATE_BODIES,
   TEMPLATE_NOTICE,
   TEMPLATE_REMINDER,
@@ -43,7 +43,7 @@ const COMP_TIMES = Array.from({ length: 20 }, (_, i) => `${String(10 + Math.floo
 
 export default async function NewNoticePage({ searchParams }: { searchParams: Promise<Params> }) {
   const sp = await searchParams;
-  const type = sp.type && isNoticeType(sp.type) ? sp.type : "TEACHER_LEAVE";
+  const type = sp.type && isNoticeType(sp.type) && sp.type !== "ANNOUNCEMENT" ? sp.type : "TEACHER_LEAVE";
   const isComp = type === "COMP_CLASS";
   const today = istDateString(new Date());
   // A comp class is announced on its own day ("your class is today at…"), so its date is always today.
@@ -103,9 +103,14 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
         title="New notice"
         subtitle="Message the families of some classes on WhatsApp — a teacher on leave, running late, a rescheduled batch"
         action={
-          <Link href="/admin/whatsapp" className="text-sm text-indigo-600 hover:underline">
-            Back to WhatsApp
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/admin/whatsapp/announce" className="text-sm text-indigo-600 hover:underline">
+              Announcement to all families
+            </Link>
+            <Link href="/admin/whatsapp" className="text-sm text-indigo-600 hover:underline">
+              Back to WhatsApp
+            </Link>
+          </div>
         }
       />
 
@@ -116,7 +121,7 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
             <form method="get" className="space-y-3">
               <input type="hidden" name="preview" value="1" />
               <Select label="Type" name="type" defaultValue={type}>
-                {NOTICE_TYPE_KEYS.map((k) => (
+                {CLASS_NOTICE_TYPE_KEYS.map((k) => (
                   <option key={k} value={k}>
                     {NOTICE_TYPES[k].label}
                   </option>

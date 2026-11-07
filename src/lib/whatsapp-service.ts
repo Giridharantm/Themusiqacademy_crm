@@ -28,6 +28,7 @@ import {
   type NoticeTypeKey,
 } from "@/lib/whatsapp-notices";
 import { sendButtons, sendList, sendTemplate, sendText, setWhatsAppBlock, whatsappConfigured } from "@/lib/whatsapp-send";
+import { familiesFromRows, type Audience, type AnnounceScope } from "@/lib/announcement";
 import { replyId, type ListRow } from "@/lib/class-reply";
 import { replyStatus, type ReplyStatus } from "@/lib/class-confirm";
 import { cleanReplyText, isReplyWindowOpen, isUnread } from "@/lib/whatsapp-inbox";
@@ -555,6 +556,68 @@ export async function createAndSendNotice(input: NoticeInput): Promise<{ noticeI
       });
       tally[outcome]++;
     }
+  }
+
+  await prisma.notice.update({ where: { id: notice.id }, data: { sentAt: new Date(), recipientCount: tally.sent + tally.failed } });
+  return { noticeId: notice.id, ...tally };
+}
+
+// ---- announcements: one message per family number --------------------------
+
+// Who an announcement reaches: every active student, the students of chosen
+// instruments, or of chosen classes (any day) — one entry per number.
+export async function announcementAudience(scope: AnnounceScope, todayStr = istDateString(new Date())): Promise<Audience & { batchIds: string[] }> {
+  const where = scope.kind === "courses" ? { courseId: { in: scope.courseIds } } : scope.kind === "batches" ? { id: { in: scope.batchIds } } : {};
+  const batches = await prisma.batch.findMany({ where, select: { id: true, dayOfWeek: true } });
+  const dayOf = new Map(batches.map((b) => [b.id, b.dayOfWeek as string]));
+  const recipients = await recipientsForBatches(batches.map((b) => b.id));
+  const audience = familiesFromRows(recipients.map((r) => ({ ...r, dayOfWeek: dayOf.get(r.batchId) ?? "" })), todayStr);
+  return { ...audience, batchIds: batches.map((b) => b.id) };
+}
+
+export type AnnouncementInput = {
+  scope: AnnounceScope;
+  message: string;
+  phones?: string[]; // only these numbers (the ones still ticked on the preview); omit for everyone in scope
+  createdById?: string;
+};
+
+// Sends the announcement once to each number, through the same approved
+// "class_notice" template as a class notice (it names the student, instrument and
+// the date of that student's next class). The audience is worked out again here.
+export async function createAndSendAnnouncement(input: AnnouncementInput): Promise<{ noticeId: string } & Tally> {
+  const message = input.message.trim();
+  if (!message) throw new Error("Write the message to send");
+  const today = istDateString(new Date());
+  const audience = await announcementAudience(input.scope, today);
+  const chosen = input.phones ? new Set(input.phones) : null;
+  const families = audience.families.filter((f) => !chosen || chosen.has(f.phone));
+  if (families.length === 0) throw new Error("Nobody to send to — tick at least one family");
+
+  const notice = await prisma.notice.create({
+    data: { type: "ANNOUNCEMENT", date: parseDateOnly(today), batchIds: audience.batchIds, message, createdById: input.createdById ?? null },
+  });
+  const tally = emptyTally();
+  tally.noConsent = audience.notAgreed.length;
+
+  // A few at a time: a few hundred messages one by one would take minutes.
+  const CONCURRENCY = 5;
+  for (let i = 0; i < families.length; i += CONCURRENCY) {
+    const outcomes = await Promise.all(
+      families.slice(i, i + CONCURRENCY).map((f) =>
+        sendLogged({
+          kind: "NOTICE",
+          phone: f.phone,
+          studentId: f.studentId,
+          noticeId: notice.id,
+          template: TEMPLATE_NOTICE,
+          params: [f.studentName, f.courseName, shortDateLabel(parseDateOnly(f.classDate)), message],
+          summary: `${NOTICE_TYPES.ANNOUNCEMENT.label} · ${f.courseName} · ${f.studentName}`,
+          dedupeKey: `notice:${notice.id}:${f.studentId}:${f.batchId}:${f.phone}`,
+        })
+      )
+    );
+    for (const o of outcomes) tally[o]++;
   }
 
   await prisma.notice.update({ where: { id: notice.id }, data: { sentAt: new Date(), recipientCount: tally.sent + tally.failed } });

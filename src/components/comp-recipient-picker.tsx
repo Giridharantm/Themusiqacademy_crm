@@ -18,10 +18,13 @@ export function CompRecipientPicker({
   rows,
   hidden,
   action,
+  nouns = ["student", "students"],
 }: {
   rows: Row[];
   hidden: { name: string; value: string }[];
   action: (formData: FormData) => void | Promise<void>;
+  // What a row is called in the counts: a student, or (for an announcement) a family.
+  nouns?: [string, string];
 }) {
   const reachable = (r: Row) => r.phones.filter((p) => p.consented).length;
   const [picked, setPicked] = useState<Set<string>>(() => new Set(rows.filter((r) => reachable(r) > 0).map((r) => r.id)));
@@ -43,7 +46,7 @@ export function CompRecipientPicker({
 
       <div className="flex items-center justify-between gap-3 text-sm">
         <p className="text-slate-700">
-          <strong>{chosen.length}</strong> of {rows.length} student{rows.length === 1 ? "" : "s"} ticked · <strong>{messages}</strong> message{messages === 1 ? "" : "s"}
+          <strong>{chosen.length}</strong> of {rows.length} {rows.length === 1 ? nouns[0] : nouns[1]} ticked · <strong>{messages}</strong> message{messages === 1 ? "" : "s"}
         </p>
         <div className="flex gap-1">
           <Button type="button" variant="ghost" onClick={() => setPicked(new Set(rows.filter((r) => reachable(r) > 0).map((r) => r.id)))}>

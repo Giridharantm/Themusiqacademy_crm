@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "NoticeType" ADD VALUE 'ANNOUNCEMENT';

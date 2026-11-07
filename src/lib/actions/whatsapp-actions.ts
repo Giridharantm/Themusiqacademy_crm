@@ -5,8 +5,9 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/authz";
 import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/attendance";
-import { blockNumber, createAndSendNotice, markConversationRead, sendConversationReply, sendRemindersNow, setAutoSkipNo, setConsent, setReminderStyle, setReminderTime, setRemindersPaused, unblockNumber, type ReminderStyle } from "@/lib/whatsapp-service";
+import { blockNumber, createAndSendAnnouncement, createAndSendNotice, markConversationRead, sendConversationReply, sendRemindersNow, setAutoSkipNo, setConsent, setReminderStyle, setReminderTime, setRemindersPaused, unblockNumber, type ReminderStyle } from "@/lib/whatsapp-service";
 import { isNoticeType, isReminderTime, normalizePhone } from "@/lib/whatsapp-notices";
+import { parseScope } from "@/lib/announcement";
 
 // Sends an ad hoc notice to the opted-in families of the chosen classes. The
 // form that posts here is the confirmation step after a recipient preview.
@@ -14,7 +15,7 @@ export async function sendNotice(formData: FormData) {
   const user = await requireRole("ADMIN");
 
   const type = String(formData.get("type") ?? "");
-  if (!isNoticeType(type)) throw new Error("Choose what kind of notice this is");
+  if (!isNoticeType(type) || type === "ANNOUNCEMENT") throw new Error("Choose what kind of notice this is");
 
   const result = await createAndSendNotice({
     type,
@@ -41,6 +42,29 @@ export async function sendNotice(formData: FormData) {
     failed: String(result.failed),
     skipped: String(result.noConsent),
   });
+  redirect(`/admin/whatsapp?${q.toString()}`);
+}
+
+// Sends an announcement: one message per family number, to everyone or to the
+// chosen instruments/classes. The audience is re-worked out here from the form's
+// choices (never trusted from the page), and only the numbers still ticked on
+// the preview are messaged.
+export async function sendAnnouncement(formData: FormData) {
+  const user = await requireRole("ADMIN");
+  const scope = parseScope({
+    audience: String(formData.get("audience") ?? ""),
+    courseId: formData.getAll("courseId").map(String),
+    batchId: formData.getAll("batchId").map(String),
+  });
+  const result = await createAndSendAnnouncement({
+    scope,
+    message: String(formData.get("message") ?? ""),
+    phones: formData.getAll("pick").map(String).filter(Boolean),
+    createdById: user.id,
+  });
+
+  revalidatePath("/admin/whatsapp");
+  const q = new URLSearchParams({ sent: result.noticeId, ok: String(result.sent), failed: String(result.failed), skipped: String(result.noConsent) });
   redirect(`/admin/whatsapp?${q.toString()}`);
 }
 

@@ -39,6 +39,9 @@ export default async function WhatsAppPage({
             <Link href="/admin/whatsapp/new?type=COMP_CLASS" className="inline-flex items-center px-3.5 py-2 rounded-md text-sm font-medium bg-white text-ink border border-line hover:bg-panel">
               Comp class
             </Link>
+            <Link href="/admin/whatsapp/announce" className="inline-flex items-center px-3.5 py-2 rounded-md text-sm font-medium bg-white text-ink border border-line hover:bg-panel">
+              Announcement
+            </Link>
             <Link href="/admin/whatsapp/new" className="inline-flex items-center px-3.5 py-2 rounded-md text-sm font-medium bg-accent text-white hover:bg-accent-dark">
               New notice
             </Link>
@@ -92,7 +95,8 @@ export default async function WhatsAppPage({
                       {NOTICE_TYPES[n.type].label} · {format(n.date, "EEE d MMM")}
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5 truncate">
-                      {n.batchIds.length} class{n.batchIds.length === 1 ? "" : "es"} · {n.recipientCount} message{n.recipientCount === 1 ? "" : "s"}
+                      {n.type === "ANNOUNCEMENT" ? "" : `${n.batchIds.length} class${n.batchIds.length === 1 ? "" : "es"} · `}
+                      {n.recipientCount} message{n.recipientCount === 1 ? "" : "s"}
                       {n.message ? ` · ${n.message}` : ""}
                     </p>
                   </div>

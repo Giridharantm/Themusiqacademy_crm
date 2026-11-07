@@ -461,6 +461,7 @@ enum NoticeType {
   CLASS_CANCELLED
   ACADEMY_LEAVE
   COMP_CLASS // a make-up class given because a teacher was off: the daily reminder wording, sent for any batches
+  ANNOUNCEMENT // one message per family number about the academy as a whole (not tied to one class date), sent to all students or chosen instruments/classes
   OTHER
 }
 

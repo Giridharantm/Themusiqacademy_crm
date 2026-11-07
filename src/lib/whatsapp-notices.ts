@@ -20,7 +20,7 @@ export const REMINDER_OPTION_LABELS = ["Yes, I'll attend", "Reschedule", "Can't 
 export const TEMPLATE_RESCHEDULED = "class_rescheduled"; // {{1}} student, {{2}} instrument, {{3}} old slot, {{4}} new slot
 export const TEMPLATE_NOTICE = "class_notice"; // {{1}} student, {{2}} instrument, {{3}} date, {{4}} message
 
-export type NoticeTypeKey = "TEACHER_LEAVE" | "TEACHER_LATE" | "RESCHEDULE" | "COMP_CLASS" | "CLASS_CANCELLED" | "ACADEMY_LEAVE" | "OTHER";
+export type NoticeTypeKey = "TEACHER_LEAVE" | "TEACHER_LATE" | "RESCHEDULE" | "COMP_CLASS" | "CLASS_CANCELLED" | "ACADEMY_LEAVE" | "ANNOUNCEMENT" | "OTHER";
 
 export const NOTICE_TYPES: Record<
   NoticeTypeKey,
@@ -63,6 +63,11 @@ export const NOTICE_TYPES: Record<
     suppressesReminder: true,
     defaultMessage: "The academy will be closed on this day, so there will be no class. Classes resume on the next working day.",
   },
+  ANNOUNCEMENT: {
+    label: "Announcement",
+    suppressesReminder: false,
+    defaultMessage: "",
+  },
   OTHER: {
     label: "Other update",
     suppressesReminder: false,
@@ -71,6 +76,9 @@ export const NOTICE_TYPES: Record<
 };
 
 export const NOTICE_TYPE_KEYS = Object.keys(NOTICE_TYPES) as NoticeTypeKey[];
+// The types offered on the per-class notice form. An announcement has its own
+// page (one message per family number, any audience), so it is not listed there.
+export const CLASS_NOTICE_TYPE_KEYS = NOTICE_TYPE_KEYS.filter((k) => k !== "ANNOUNCEMENT");
 
 export const isNoticeType = (v: string): v is NoticeTypeKey => v in NOTICE_TYPES;
 
