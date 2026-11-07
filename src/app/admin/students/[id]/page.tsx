@@ -13,6 +13,7 @@ import {
   updateEnrollmentBatch,
   deleteEnrollment,
   updateStudentStatus,
+  updateStudentDetails,
   addStudentFollowUp,
   markStudentFollowUpDone,
 } from "@/lib/actions/student-actions";
@@ -593,6 +594,34 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                   })}
                 </ul>
               )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader title="Student details" subtitle="Correct the name, phone or other details on this student's record" />
+            <CardBody>
+              {/* keyed on the saved values so the fields reload after a save */}
+              <form
+                key={[student.name, student.phone, student.email, student.address, student.gender, student.dob?.toISOString()].join("|")}
+                action={updateStudentDetails.bind(null, student.id)}
+                className="space-y-3"
+              >
+                <Input label="Name" name="name" defaultValue={student.name} required />
+                <Input label="Phone" name="phone" defaultValue={student.phone ?? ""} />
+                <Input label="Email" name="email" type="email" defaultValue={student.email ?? ""} />
+                <Input label="Date of birth" name="dob" type="date" defaultValue={student.dob ? format(student.dob, "yyyy-MM-dd") : ""} />
+                <Select label="Gender" name="gender" defaultValue={student.gender ?? ""}>
+                  <option value="">Not specified</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </Select>
+                <Input label="Address" name="address" defaultValue={student.address ?? ""} />
+                <p className="text-xs text-slate-400">
+                  WhatsApp messages go to the parent logins below when there are any, and to this phone only when there are none. A changed phone is switched on for WhatsApp, as at registration (unless that number said STOP). A parent&apos;s own name or number is changed under Users.
+                </p>
+                <Button type="submit" variant="secondary" className="w-full">Save details</Button>
+              </form>
             </CardBody>
           </Card>
 

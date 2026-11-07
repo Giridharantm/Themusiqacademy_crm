@@ -10,6 +10,7 @@ import { placeholderEmail } from "@/lib/login";
 import { normalizePhone } from "@/lib/whatsapp-notices";
 import { revalidatePath } from "next/cache";
 import { nextStudentCode } from "@/lib/students";
+import { parseStudentDetails } from "@/lib/student-details";
 import { PLAN_CLASSES, PLAN_DAYS, addDays, type SubscriptionPlan } from "@/lib/subscription";
 import bcrypt from "bcryptjs";
 
@@ -39,6 +40,33 @@ export async function createStudent(formData: FormData) {
 
   revalidatePath("/admin/students");
   return student.id;
+}
+
+// Corrects a student's own record — name, phone, email, date of birth, gender,
+// address — for a student added directly (leads sync theirs from the lead).
+// If the phone changed, the new number is switched on for WhatsApp the same way
+// it is at registration (never over a STOP or a spam block).
+export async function updateStudentDetails(studentId: string, formData: FormData) {
+  await requireRole("ADMIN", "FRONT_DESK");
+  const student = await prisma.student.findUnique({ where: { id: studentId }, select: { phone: true } });
+  if (!student) throw new Error("Student not found");
+
+  const parsed = parseStudentDetails({
+    name: formData.get("name"),
+    dob: formData.get("dob"),
+    gender: formData.get("gender"),
+    phone: formData.get("phone"),
+    email: formData.get("email"),
+    address: formData.get("address"),
+  });
+  if (!parsed.ok) throw new Error(parsed.error);
+
+  await prisma.student.update({ where: { id: studentId }, data: parsed.value });
+  if (parsed.value.phone && parsed.value.phone !== normalizePhone(student.phone)) await recordRegistrationConsent(studentId);
+
+  revalidatePath(`/admin/students/${studentId}`);
+  revalidatePath("/admin/students");
+  revalidatePath("/admin/whatsapp");
 }
 
 export async function updateStudentStatus(studentId: string, status: string) {
