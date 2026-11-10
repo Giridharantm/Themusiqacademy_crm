@@ -28,7 +28,17 @@ export type TrialRequest = {
   email: string | null;
   interest: string;
   classFor: string | null;
+  // Google Ads click ID the website carried over from the ad click (null when
+  // the visitor didn't come from an ad, or it isn't a plausible click ID).
+  adClickId: string | null;
 };
+
+// A Google click ID (gclid) is a long URL-safe token; anything else sent in the
+// field is dropped rather than stored.
+export function cleanClickId(raw: unknown): string | null {
+  const v = typeof raw === "string" ? raw.trim() : "";
+  return /^[A-Za-z0-9_-]{10,200}$/.test(v) ? v : null;
+}
 
 export type TrialParseResult =
   | { ok: true; value: TrialRequest }
@@ -59,7 +69,7 @@ export function parseTrialRequest(body: unknown, interestOptions: string[]): Tri
   const classForRaw = str(b.classFor, 40);
   const classFor = (CLASS_FOR_OPTIONS as readonly string[]).includes(classForRaw) ? classForRaw : null;
 
-  return { ok: true, value: { name, phone, email: emailRaw || null, interest, classFor } };
+  return { ok: true, value: { name, phone, email: emailRaw || null, interest, classFor, adClickId: cleanClickId(b.gclid) } };
 }
 
 // True when the submission looks automated: the hidden "website" field was
@@ -103,6 +113,7 @@ export function createRateLimiter(opts: { perKey: number; global: number; window
 export function leadNotes(req: TrialRequest, submittedAt: Date) {
   const lines = ["Requested a trial class via the website form."];
   if (req.classFor) lines.push(`Class is for: ${req.classFor}.`);
+  if (req.adClickId) lines.push("Came from a Google ad click.");
   lines.push(`Submitted ${submittedAt.toISOString().slice(0, 16).replace("T", " ")} UTC.`);
   return lines.join(" ");
 }

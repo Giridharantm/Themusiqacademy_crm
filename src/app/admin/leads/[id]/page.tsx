@@ -54,7 +54,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               <div className="grid grid-cols-2 gap-4 text-sm mb-4">
                 <div>
                   <p className="text-slate-500">Source</p>
-                  <p className="text-slate-900 font-medium">{lead.source.replace("_", " ")}</p>
+                  <p className="text-slate-900 font-medium">
+                    {lead.source.replace("_", " ")}
+                    {lead.gclid && <span className="ml-2 align-middle"><Badge color="blue">Google Ads click</Badge></span>}
+                  </p>
                 </div>
                 <div>
                   <p className="text-slate-500">Interested course</p>

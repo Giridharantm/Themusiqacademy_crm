@@ -88,7 +88,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                       <div>
                         <p className="text-sm font-medium text-slate-900">{lead.name}</p>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          {lead.phone} · {lead.source.replace("_", " ")} · {lead.interestedCourse?.name ?? "No course selected"}
+                          {lead.phone} · {lead.source.replace("_", " ")}{lead.gclid ? " (Google Ads)" : ""} · {lead.interestedCourse?.name ?? "No course selected"}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">

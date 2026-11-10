@@ -121,6 +121,9 @@ model Lead {
   interestedCourseId String?
   interestedCourse   Course?    @relation(fields: [interestedCourseId], references: [id])
   notes              String?
+  // Google Ads click ID (gclid) carried from the ad click to the website form, so
+  // an enquiry can be credited to the ad that produced it. Null for every other lead.
+  gclid              String?
   assignedToId       String?
   assignedTo         User?      @relation("AssignedStaff", fields: [assignedToId], references: [id])
   createdAt          DateTime   @default(now())

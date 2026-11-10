@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeIndianPhone, parseTrialRequest, looksLikeBot, createRateLimiter, leadNotes, MIN_FILL_MS } from "./trial-request";
+import { cleanClickId, normalizeIndianPhone, parseTrialRequest, looksLikeBot, createRateLimiter, leadNotes, MIN_FILL_MS } from "./trial-request";
 
 const COURSES = ["Keyboard", "Guitar", "Drums", "Violin", "Carnatic Vocals"];
 
@@ -27,7 +27,7 @@ describe("parseTrialRequest", () => {
     const r = parseTrialRequest(good, COURSES);
     expect(r).toEqual({
       ok: true,
-      value: { name: "Asha Rao", phone: "9884904856", email: "asha@example.com", interest: "Guitar", classFor: "My child (under 18)" },
+      value: { name: "Asha Rao", phone: "9884904856", email: "asha@example.com", interest: "Guitar", classFor: "My child (under 18)", adClickId: null },
     });
   });
 
@@ -100,10 +100,36 @@ describe("createRateLimiter", () => {
   });
 });
 
+describe("Google click id", () => {
+  const base = { name: "Asha Rao", phone: "9884904856", interest: "guitar" };
+  it("keeps a plausible gclid and drops anything else", () => {
+    expect(cleanClickId("Cj0KCQiAx9m_BhCCARIsAD_jr2Pq-abc_123")).toBe("Cj0KCQiAx9m_BhCCARIsAD_jr2Pq-abc_123");
+    expect(cleanClickId("  EAIaIQobChMI-xyz_0123456789  ")).toBe("EAIaIQobChMI-xyz_0123456789");
+    expect(cleanClickId("short")).toBeNull();
+    expect(cleanClickId("has spaces in it here")).toBeNull();
+    expect(cleanClickId("<script>alert(1)</script>")).toBeNull();
+    expect(cleanClickId("a".repeat(201))).toBeNull();
+    expect(cleanClickId(undefined)).toBeNull();
+    expect(cleanClickId(12345678901234)).toBeNull();
+  });
+  it("is carried on the parsed request, and is null when absent", () => {
+    const withId = parseTrialRequest({ ...base, gclid: "Cj0KCQiAx9m_BhCCARIsAD_jr2Pq" }, COURSES);
+    expect(withId.ok && withId.value.adClickId).toBe("Cj0KCQiAx9m_BhCCARIsAD_jr2Pq");
+    const without = parseTrialRequest(base, COURSES);
+    expect(without.ok && without.value.adClickId).toBeNull();
+  });
+  it("is mentioned in the lead notes only for an ad click", () => {
+    const when = new Date("2026-10-14T08:05:30Z");
+    const mk = (adClickId: string | null) => ({ name: "A", phone: "9884904856", email: null, interest: "Guitar", classFor: null, adClickId });
+    expect(leadNotes(mk("Cj0KCQiAx9m_BhCCARIs"), when)).toContain("Google ad click");
+    expect(leadNotes(mk(null), when)).not.toContain("Google ad click");
+  });
+});
+
 describe("leadNotes", () => {
   it("records where the lead came from and who the class is for", () => {
     const notes = leadNotes(
-      { name: "A", phone: "9884904856", email: null, interest: "Guitar", classFor: "Myself (adult)" },
+      { name: "A", phone: "9884904856", email: null, interest: "Guitar", classFor: "Myself (adult)", adClickId: null },
       new Date("2026-10-14T08:05:30Z")
     );
     expect(notes).toContain("website form");

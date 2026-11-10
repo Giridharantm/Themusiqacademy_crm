@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   const parsed = parseTrialRequest(body, courses.map((c) => c.name));
   if (!parsed.ok) return reply({ ok: false, error: parsed.error }, 400);
 
-  const { name, phone, email, interest } = parsed.value;
+  const { name, phone, email, interest, adClickId } = parsed.value;
   const course = courses.find((c) => c.name === interest);
   const now = new Date();
 
@@ -55,7 +55,11 @@ export async function POST(request: NextRequest) {
   if (existing) {
     await prisma.lead.update({
       where: { id: existing.id },
-      data: { notes: `${existing.notes ?? ""}\nAsked again via the website form (${interest}) at ${now.toISOString().slice(0, 16).replace("T", " ")} UTC.`.trim() },
+      data: {
+        notes: `${existing.notes ?? ""}\nAsked again via the website form (${interest}) at ${now.toISOString().slice(0, 16).replace("T", " ")} UTC.`.trim(),
+        // Keep the first ad click; only fill it in if this lead didn't have one.
+        ...(adClickId && !existing.gclid ? { gclid: adClickId } : {}),
+      },
     });
   } else {
     await prisma.lead.create({
@@ -65,6 +69,7 @@ export async function POST(request: NextRequest) {
         email,
         source: "ONLINE",
         interestedCourseId: course?.id ?? null,
+        gclid: adClickId,
         notes: leadNotes(parsed.value, now),
       },
     });
