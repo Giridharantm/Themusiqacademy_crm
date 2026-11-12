@@ -4,6 +4,10 @@
 
 `README.md` is the living product/feature doc — read it first for how the app actually behaves. **Keep it in sync**: a schema change, a new business rule, or a changed convention that isn't reflected there is an incomplete change, not a documentation nit for later.
 
+## The Handbook (keep it up to date)
+
+Besides the README there is a separate **Handbook** (a Claude Docs document, "The Musiq Academy: Website and CRM Handbook"; its link and ids are in Claude's memory file `handbook-doc.md`). It covers logins and accounts, infrastructure, the website, the CRM spec, data model, flows, WhatsApp and ads setup, DIY guides, runbooks and a security checklist. **A change that makes any of it wrong is incomplete until the Handbook is updated too**, in the same session. That includes: servers, DNS, cron jobs, backups, deploy or rollback steps, environment variable names, accounts or who holds a login, roles and permissions, new modules or business rules, schema and migrations, WhatsApp templates and settings, ad campaigns and budgets, website structure or repeated facts, and any security item being fixed (tick it off in section 15). Update the affected sections in place (read the doc with `sinceRev` first, since people edit it), change the "as of" date, and tell the user what changed. Never write passwords, tokens or keys into it: only where they live and how to reset them. The Word export is a snapshot; re-export only when asked.
+
 ## Database migrations
 
 - **Additive changes** (new column/table with a default, new enum value): `npx prisma migrate dev --name <description>` works fine non-interactively.
