@@ -33,6 +33,26 @@ import { replyId, type ListRow } from "@/lib/class-reply";
 import { replyStatus, type ReplyStatus } from "@/lib/class-confirm";
 import { cleanReplyText, isReplyWindowOpen, isUnread } from "@/lib/whatsapp-inbox";
 import { attendanceForSubscription, countUsedClasses, subscriptionTotals } from "@/lib/subscription";
+import { buildDailyStats, groupFailures, istDay, type DayStats, type FailureGroup, type StatRow } from "@/lib/whatsapp-stats";
+
+// ---- daily delivery numbers -------------------------------------------------
+
+// Messages per India day for the last `days` days (newest first), and today's
+// failures grouped by cause. Feeds the admin's WhatsApp page and the dashboard alert.
+export async function loadWhatsAppDaily(now = new Date(), days = 14): Promise<{ days: DayStats[]; failuresToday: FailureGroup[] }> {
+  const todayStr = istDay(now);
+  const oldest = new Date(now.getTime() - (days - 1) * 864e5);
+  const from = new Date(`${istDay(oldest)}T00:00:00+05:30`);
+  const [rows, firstReceipt] = await Promise.all([
+    prisma.whatsAppMessage.findMany({ where: { createdAt: { gte: from } }, select: { kind: true, status: true, createdAt: true, deliveredAt: true, readAt: true, error: true } }),
+    prisma.whatsAppMessage.aggregate({ _min: { deliveredAt: true } }),
+  ]);
+  const statRows: StatRow[] = rows;
+  return {
+    days: buildDailyStats(statRows, now, days, firstReceipt._min.deliveredAt),
+    failuresToday: groupFailures(statRows, todayStr),
+  };
+}
 
 // ---- consent --------------------------------------------------------------
 

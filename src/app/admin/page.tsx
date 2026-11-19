@@ -6,7 +6,8 @@ import { Card, CardBody, CardHeader, PageHeader, StatCard, EmptyState, Badge, Bu
 import { markStudentFollowUpDone } from "@/lib/actions/student-actions";
 import { subscriptionTotals, countUsedClasses, attendanceForSubscription } from "@/lib/subscription";
 import { paidInvoiceRevenue } from "@/lib/billing";
-import { unreadConversationCount } from "@/lib/whatsapp-service";
+import { loadWhatsAppDaily, unreadConversationCount } from "@/lib/whatsapp-service";
+import { WhatsAppAlert } from "@/components/whatsapp-alert";
 import { format } from "date-fns";
 
 // Below this many classes remaining, a subscription counts toward the
@@ -30,7 +31,7 @@ export default async function AdminDashboard() {
   const todayCode = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][now.getDay()];
   const makeUpsOwed = (await loadTracked({ status: "BOOKED", kind: "SKIP", student: { status: "ACTIVE" }, fromDate: { gte: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14) } })).filter((c) => c.outcome === "OWED").length;
 
-  const [leadCounts, activeStudents, activeSubscriptions, upcomingFollowUps, studentCallbacksDue, todaysBatches, invoices, unreadWhatsApp] = await Promise.all([
+  const [leadCounts, activeStudents, activeSubscriptions, upcomingFollowUps, studentCallbacksDue, todaysBatches, invoices, unreadWhatsApp, whatsAppToday] = await Promise.all([
     prisma.lead.groupBy({ by: ["status"], _count: true }),
     prisma.student.count({ where: { status: "ACTIVE" } }),
     prisma.subscription.findMany({
@@ -55,6 +56,8 @@ export default async function AdminDashboard() {
     prisma.batch.findMany({ where: { dayOfWeek: todayCode }, include: { course: true, teacher: true } }),
     prisma.invoice.findMany({ where: { status: { not: "CANCELLED" } }, include: { payments: true } }),
     unreadConversationCount(),
+    // Only the admin sees the "WhatsApp messages failed today" alert, so only load it for them.
+    isAdmin ? loadWhatsAppDaily(now, 1) : Promise.resolve(null),
   ]);
 
   const leadCountByStatus = Object.fromEntries(leadCounts.map((l) => [l.status, l._count]));
@@ -142,6 +145,8 @@ export default async function AdminDashboard() {
   return (
     <div>
       <PageHeader title="Dashboard" subtitle="Overview of leads, students and billing" />
+
+      {whatsAppToday && <WhatsAppAlert failures={whatsAppToday.failuresToday} />}
 
       {unreadWhatsApp > 0 && (
         <Link

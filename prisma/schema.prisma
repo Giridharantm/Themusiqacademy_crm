@@ -522,6 +522,11 @@ model WhatsAppMessage {
   dedupeKey   String                @unique
   createdAt   DateTime              @default(now())
   sentAt      DateTime?
+  // WhatsApp's receipts for a message we sent (webhook statuses "delivered" /
+  // "read"). Only filled from the day receipts started being stored; "sent"
+  // alone only means WhatsApp accepted it. Null = no receipt (yet).
+  deliveredAt DateTime?
+  readAt      DateTime?
 
   @@index([createdAt])
   @@index([phone, createdAt])

@@ -38,6 +38,18 @@ function messageText(m: Record<string, unknown>): string {
     const reply = asRecord(i?.button_reply) ?? asRecord(i?.list_reply);
     return String(reply?.title ?? "").trim() || "[interactive reply]";
   }
+  // WhatsApp's own notices about a contact ("changed their number", "security
+  // code changed"). Not something the person typed, so say what it is.
+  if (type === "system") {
+    const sys = asRecord(m.system);
+    const body = String(sys?.body ?? "").trim();
+    const newId = typeof sys?.new_wa_id === "string" ? sys.new_wa_id.replace(/\D/g, "") : "";
+    if (body) return `[WhatsApp notice] ${body}`;
+    if (sys?.type === "user_changed_number" && newId) return `[WhatsApp notice] this contact changed their number to ${newId}`;
+    if (sys?.type === "user_identity_changed") return "[WhatsApp notice] this contact's security code changed (new phone or reinstall)";
+    return "[WhatsApp notice] automatic message from WhatsApp, not written by the person";
+  }
+  if (type === "reaction") return `[reaction] ${String(asRecord(m.reaction)?.emoji ?? "").trim()}`.trim();
   return `[${type} message]`;
 }
 
@@ -162,6 +174,7 @@ export function summarizeWebhook(payload: unknown): string {
 export type StatusUpdate = {
   id: string; // the wamid we got back when sending
   status: string; // sent | delivered | read | failed
+  at: Date | null; // when WhatsApp says it happened
   errorCode: number | null;
   errorTitle: string | null;
   errorDetail: string | null;
@@ -186,9 +199,11 @@ export function parseStatusUpdates(payload: unknown): StatusUpdate[] {
         const st = asRecord(s);
         if (!st || typeof st.id !== "string" || typeof st.status !== "string") continue;
         const err = Array.isArray(st.errors) ? asRecord(st.errors[0]) : null;
+        const seconds = typeof st.timestamp === "string" ? Number(st.timestamp) : typeof st.timestamp === "number" ? st.timestamp : NaN;
         out.push({
           id: st.id,
           status: st.status,
+          at: Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000) : null,
           errorCode: typeof err?.code === "number" ? err.code : null,
           errorTitle: typeof err?.title === "string" ? err.title : typeof err?.message === "string" ? err.message : null,
           errorDetail: typeof asRecord(err?.error_data)?.details === "string" ? (asRecord(err?.error_data)!.details as string) : null,
@@ -202,5 +217,10 @@ export function parseStatusUpdates(payload: unknown): StatusUpdate[] {
 // WhatsApp flags what it can't pass on to a business number (polls, view-once
 // media, spam broadcasts…) as "unsupported". There is nothing to follow up on,
 // so such a message from a new number must not become a lead — it still shows
-// in the inbox, where it can be blocked.
-export const createsLead = (type: string) => type !== "unsupported" && type !== "unknown";
+// in the inbox, where it can be blocked. WhatsApp's own notices ("system", e.g. a
+// contact changed number) and emoji reactions are not enquiries either.
+export const createsLead = (type: string) => type !== "unsupported" && type !== "unknown" && type !== "system" && type !== "reaction";
+
+// Messages that are WhatsApp talking, not the person: stored for the inbox but they
+// never count as the person agreeing to class messages and never get an auto-reply.
+export const isSystemNotice = (type: string) => type === "system";

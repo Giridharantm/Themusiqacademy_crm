@@ -125,8 +125,8 @@ describe("parseStatusUpdates", () => {
         ])
       )
     ).toEqual([
-      { id: "wamid.A", status: "delivered", errorCode: null, errorTitle: null, errorDetail: null },
-      { id: "wamid.B", status: "failed", errorCode: 131026, errorTitle: "Message undeliverable", errorDetail: "Not a WhatsApp user" },
+      { id: "wamid.A", status: "delivered", at: null, errorCode: null, errorTitle: null, errorDetail: null },
+      { id: "wamid.B", status: "failed", at: null, errorCode: 131026, errorTitle: "Message undeliverable", errorDetail: "Not a WhatsApp user" },
     ]);
   });
 

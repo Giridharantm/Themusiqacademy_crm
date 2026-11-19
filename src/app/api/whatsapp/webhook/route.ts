@@ -8,6 +8,7 @@ import {
   whatsappNote,
   createSeenIds,
   createsLead,
+  isSystemNotice,
   summarizeWebhook,
   parseStatusUpdates,
 } from "@/lib/whatsapp";
@@ -61,6 +62,15 @@ export async function POST(request: NextRequest) {
   // fail it afterwards, so a failure is written back onto the message log row
   // (with Meta's reason) instead of leaving it looking "sent".
   for (const s of parseStatusUpdates(payload)) {
+    // "delivered" / "read" receipts are stored so the WhatsApp page can show how
+    // many messages actually reached phones, not just how many WhatsApp accepted.
+    if (s.status === "delivered" || s.status === "read") {
+      const when = s.at ?? new Date();
+      await prisma.whatsAppMessage.updateMany({ where: { waMessageId: s.id, deliveredAt: null }, data: { deliveredAt: when } });
+      if (s.status === "read") await prisma.whatsAppMessage.updateMany({ where: { waMessageId: s.id, readAt: null }, data: { readAt: when } });
+      console.log(`[whatsapp] message ${s.status}`);
+      continue;
+    }
     if (s.status !== "failed") {
       console.log(`[whatsapp] message ${s.status}`);
       continue;
@@ -93,6 +103,14 @@ export async function POST(request: NextRequest) {
     // for — is dropped here, so it can't create a second lead or reply.
     if (!(await recordInbound({ id: msg.id, phone, name: msg.name, text: msg.text, at: msg.at }))) continue;
     inboxChanged = true;
+
+    // WhatsApp's own notice (e.g. "this contact changed their number"): shown in
+    // the inbox with what it says, but it is not the family writing — no consent,
+    // no auto-reply, no lead.
+    if (isSystemNotice(msg.type)) {
+      console.log("[whatsapp] system notice kept in the inbox, nothing else done");
+      continue;
+    }
 
     // STOP / START switch class messages off and on for this number, and are
     // confirmed with a short reply. Whoever sends them, student or not.

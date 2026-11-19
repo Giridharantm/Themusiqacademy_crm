@@ -3,10 +3,21 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardBody, CardHeader, PageHeader, StatCard, EmptyState, Badge } from "@/components/ui";
 import { NOTICE_TYPES, clockLabel, istLabel } from "@/lib/whatsapp-notices";
 import { isDryRun, whatsappConfigured } from "@/lib/whatsapp-send";
-import { getReminderSchedule, getRemindersPaused } from "@/lib/whatsapp-service";
+import { getReminderSchedule, getRemindersPaused, loadWhatsAppDaily } from "@/lib/whatsapp-service";
+import { WhatsAppAlert } from "@/components/whatsapp-alert";
+import type { Counts, DayStats } from "@/lib/whatsapp-stats";
 import { format } from "date-fns";
 
 const statusColors: Record<string, string> = { SENT: "green", FAILED: "red", PENDING: "yellow", DRY_RUN: "blue" };
+
+// Everything we sent that day (reminders, notices and replies together).
+function outbound(d: DayStats): Counts {
+  const parts = [d.reminders, d.notices, d.replies];
+  return parts.reduce(
+    (t, c) => ({ total: t.total + c.total, accepted: t.accepted + c.accepted, delivered: t.delivered + c.delivered, read: t.read + c.read, failed: t.failed + c.failed, waiting: t.waiting + c.waiting }),
+    { total: 0, accepted: 0, delivered: 0, read: 0, failed: 0, waiting: 0 }
+  );
+}
 
 export default async function WhatsAppPage({
   searchParams,
@@ -15,13 +26,14 @@ export default async function WhatsAppPage({
 }) {
   const { sent, ok, failed, skipped } = await searchParams;
 
-  const [optedIn, activeStudents, notices, messages, pause, schedule] = await Promise.all([
+  const [optedIn, activeStudents, notices, messages, pause, schedule, daily] = await Promise.all([
     prisma.whatsAppContact.count({ where: { optedIn: true } }),
     prisma.student.count({ where: { status: "ACTIVE" } }),
     prisma.notice.findMany({ orderBy: { createdAt: "desc" }, take: 15 }),
     prisma.whatsAppMessage.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
     getRemindersPaused(),
     getReminderSchedule(),
+    loadWhatsAppDaily(),
   ]);
 
   const configured = whatsappConfigured();
@@ -57,6 +69,8 @@ export default async function WhatsAppPage({
         </div>
       )}
 
+      <WhatsAppAlert failures={daily.failuresToday} />
+
       {!configured && (
         <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           WhatsApp sending isn&apos;t switched on yet (the server has no WhatsApp access token). You can prepare notices, but nothing will be sent.
@@ -78,6 +92,53 @@ export default async function WhatsAppPage({
           href="/admin/whatsapp/reminders"
         />
       </div>
+
+      <Card className="mb-6">
+        <CardHeader
+          title="Messages per day"
+          subtitle="Last 14 days. Sent = WhatsApp took it, Delivered = it reached the phone, Read = opened. Reminders, notices and replies together. Days before delivery receipts were stored show a dash."
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-100">
+                <th className="px-5 py-2 font-medium">Day</th>
+                <th className="px-3 py-2 font-medium text-right">Tried</th>
+                <th className="px-3 py-2 font-medium text-right">Sent</th>
+                <th className="px-3 py-2 font-medium text-right">Delivered</th>
+                <th className="px-3 py-2 font-medium text-right">Read</th>
+                <th className="px-3 py-2 font-medium text-right">Failed</th>
+                <th className="px-3 py-2 font-medium text-right">Reminders delivered</th>
+                <th className="px-5 py-2 font-medium text-right">Families wrote</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {daily.days.map((d, i) => {
+                const o = outbound(d);
+                const tracked = d.receiptsTracked;
+                const dash = <span className="text-slate-300">–</span>;
+                return (
+                  <tr key={d.dateStr} className={i === 0 ? "bg-panel/60" : ""}>
+                    <td className="px-5 py-2 text-slate-900">
+                      {format(new Date(d.dateStr + "T12:00:00"), "EEE d MMM")}
+                      {i === 0 ? <span className="ml-2 text-xs text-slate-500">today</span> : null}
+                    </td>
+                    <td className="px-3 py-2 text-right">{o.total || dash}</td>
+                    <td className="px-3 py-2 text-right">{o.total ? o.accepted : dash}</td>
+                    <td className="px-3 py-2 text-right">{o.total && tracked ? o.delivered : dash}</td>
+                    <td className="px-3 py-2 text-right">{o.total && tracked ? o.read : dash}</td>
+                    <td className={"px-3 py-2 text-right " + (o.failed ? "font-semibold text-red-600" : "")}>{o.total ? o.failed : dash}</td>
+                    <td className="px-3 py-2 text-right text-slate-600">
+                      {d.reminders.total ? (tracked ? `${d.reminders.delivered} of ${d.reminders.total}` : `${d.reminders.accepted} of ${d.reminders.total} sent`) : dash}
+                    </td>
+                    <td className="px-5 py-2 text-right text-slate-600">{d.inbound || dash}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
@@ -124,7 +185,7 @@ export default async function WhatsAppPage({
                     </p>
                     {m.error && <p className="text-xs text-red-600 mt-0.5 break-words">{m.error}</p>}
                   </div>
-                  <Badge color={statusColors[m.status]}>{m.status.replace("_", " ")}</Badge>
+                  <Badge color={statusColors[m.status]}>{m.readAt ? "READ" : m.deliveredAt ? "DELIVERED" : m.status.replace("_", " ")}</Badge>
                 </li>
               ))}
             </ul>
