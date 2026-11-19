@@ -392,6 +392,11 @@ export default async function RemindersPage({
                   {r.sent && (
                     <details className="mt-1.5 text-xs">
                       <summary className="cursor-pointer text-indigo-600 hover:underline">See the message</summary>
+                      {r.phone && (
+                        <Link href={{ pathname: "/admin/whatsapp/inbox", query: { phone: r.phone } }} className="mt-1 inline-block text-xs text-indigo-600 hover:underline">
+                          Open the full chat with {r.phone}
+                        </Link>
+                      )}
                       <div className="mt-1.5 max-w-xl rounded-md bg-emerald-50 border border-emerald-100 px-3 py-2 text-sm text-emerald-900">
                         {r.sent.text ?? "The wording of this message wasn't kept."}
                         <p className="mt-1.5 text-xs text-emerald-700">

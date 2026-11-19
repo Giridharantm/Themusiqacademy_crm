@@ -913,6 +913,24 @@ export async function listConversations(limit = 100) {
   }));
 }
 
+// Finds students (and the numbers we message for them) by student or parent name or by
+// part of a phone number, so staff can open the chat of a family that has never written
+// to us — the Conversations list only holds numbers that did.
+export async function searchFamilies(q: string, limit = 12): Promise<{ id: string; name: string; status: string; phones: string[] }[]> {
+  const text = q.trim();
+  if (text.length < 2) return [];
+  const digits = text.replace(/\D/g, "");
+  const or: Prisma.StudentWhereInput[] = [{ name: { contains: text, mode: "insensitive" } }, { guardians: { some: { user: { name: { contains: text, mode: "insensitive" } } } } }];
+  if (digits.length >= 4) or.push({ phone: { contains: digits } }, { guardians: { some: { user: { phone: { contains: digits } } } } });
+  const students = await prisma.student.findMany({
+    where: { OR: or },
+    orderBy: { name: "asc" },
+    take: limit,
+    select: { id: true, name: true, status: true, phone: true, guardians: { select: { user: { select: { phone: true } } } } },
+  });
+  return students.map((s) => ({ id: s.id, name: s.name, status: s.status, phones: recipientPhones(s.guardians.map((g) => g.user.phone), s.phone) }));
+}
+
 export async function getThread(phone: string) {
   const [contact, messages, owners] = await Promise.all([
     prisma.whatsAppContact.findUnique({ where: { phone } }),

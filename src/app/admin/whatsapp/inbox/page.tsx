@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { markNumberAsSpam, sendInboxReply, unblockNumberAction } from "@/lib/actions/whatsapp-actions";
-import { getThread, listBlocked, listConversations } from "@/lib/whatsapp-service";
+import { getThread, listBlocked, listConversations, searchFamilies } from "@/lib/whatsapp-service";
 import { isReplyWindowOpen, previewText, replyHoursLeft, isUnread } from "@/lib/whatsapp-inbox";
-import { istLabel, normalizePhone } from "@/lib/whatsapp-notices";
+import { istLabel, normalizePhone, sentMessageText } from "@/lib/whatsapp-notices";
 import { Button, Card, CardBody, CardHeader, PageHeader, Textarea, EmptyState } from "@/components/ui";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { SubmitButton } from "@/components/submit-button";
@@ -20,12 +20,14 @@ function titleFor(owners: Owners, name: string | null, phone: string) {
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ phone?: string; error?: string; blocked?: string; unblocked?: string; warning?: string }>;
+  searchParams: Promise<{ phone?: string; q?: string; error?: string; blocked?: string; unblocked?: string; warning?: string }>;
 }) {
   const sp = await searchParams;
   const selected = normalizePhone(sp.phone) ?? null;
 
-  const [conversations, blockedNumbers] = await Promise.all([listConversations(), listBlocked()]);
+  const q = sp.q?.trim() ?? "";
+  const typedNumber = normalizePhone(q);
+  const [conversations, blockedNumbers, found] = await Promise.all([listConversations(), listBlocked(), searchFamilies(q)]);
   const thread = selected ? await getThread(selected) : null;
   const windowOpen = isReplyWindowOpen(thread?.contact?.lastInboundAt);
 
@@ -53,7 +55,50 @@ export default async function InboxPage({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="space-y-6">
         <Card className="h-fit">
-          <CardHeader title="Conversations" subtitle="Newest message first" />
+          <CardHeader title="Conversations" subtitle="Families who wrote to you, newest first" />
+          <CardBody className="border-b border-slate-100 space-y-2">
+            <form method="get" className="flex gap-2">
+              <input
+                type="search"
+                name="q"
+                defaultValue={q}
+                placeholder="Find any family: name or number"
+                className="flex-1 min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+              <Button type="submit" variant="secondary">
+                Find
+              </Button>
+            </form>
+            <p className="text-xs text-slate-500">To read the reminders and notices we sent a family that never wrote back, find them here.</p>
+            {q && (
+              <ul className="divide-y divide-slate-100 rounded-md border border-slate-100">
+                {typedNumber && (
+                  <li>
+                    <Link href={{ pathname: "/admin/whatsapp/inbox", query: { phone: typedNumber } }} className="block px-3 py-2 text-sm text-indigo-700 hover:bg-slate-50">
+                      Open the chat with {typedNumber}
+                    </Link>
+                  </li>
+                )}
+                {found.map((s) => (
+                  <li key={s.id} className="px-3 py-2">
+                    <p className="text-sm font-medium text-slate-900">
+                      {s.name}
+                      {s.status !== "ACTIVE" ? <span className="ml-1 text-xs text-slate-400">({s.status.toLowerCase()})</span> : null}
+                    </p>
+                    <p className="text-xs">
+                      {s.phones.length === 0 ? <span className="text-slate-400">no number on file</span> : null}
+                      {s.phones.map((p) => (
+                        <Link key={p} href={{ pathname: "/admin/whatsapp/inbox", query: { phone: p } }} className="mr-3 text-indigo-600 hover:underline">
+                          Chat with {p}
+                        </Link>
+                      ))}
+                    </p>
+                  </li>
+                ))}
+                {!typedNumber && found.length === 0 && <li className="px-3 py-2 text-sm text-slate-500">No family matches “{q}”.</li>}
+              </ul>
+            )}
+          </CardBody>
           {conversations.length === 0 ? (
             <CardBody>
               <EmptyState text="No messages yet. Replies to your reminders and notices will show up here." />
@@ -152,22 +197,21 @@ export default async function InboxPage({
                   <EmptyState text="No messages" />
                 ) : (
                   thread.messages.map((m) => {
-                    if (m.kind === "REMINDER" || m.kind === "NOTICE") {
-                      return (
-                        <div key={m.id} className="text-center text-xs text-slate-500">
-                          {m.kind === "REMINDER" ? "Reminder sent" : "Notice sent"}: {m.summary} · {istLabel(m.createdAt)}
-                          {m.status === "FAILED" && <span className="text-red-600"> · failed: {m.error}</span>}
-                        </div>
-                      );
-                    }
                     const inbound = m.kind === "INBOUND";
+                    // Automatic messages (reminders, notices, class changes) are shown as chat bubbles with the words the
+                    // family got and WhatsApp's receipts, the same as a typed reply.
+                    const automatic = m.kind === "REMINDER" || m.kind === "NOTICE";
+                    const words = automatic ? (sentMessageText(m)?.text ?? m.summary) : (m.body ?? m.summary);
+                    const receipt = inbound ? null : m.status === "FAILED" ? "not delivered" : m.readAt ? "read" : m.deliveredAt ? "delivered" : m.status === "SENT" ? "sent" : m.status === "DRY_RUN" ? "test, not sent" : "sending";
                     return (
                       <div key={m.id} className={`flex ${inbound ? "justify-start" : "justify-end"}`}>
-                        <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap break-words ${inbound ? "bg-white border border-line text-slate-900" : "bg-accent text-white"}`}>
-                          {m.body ?? m.summary}
-                          <p className={`mt-1 text-[11px] ${inbound ? "text-slate-400" : "text-white/70"}`}>
+                        <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap break-words ${inbound ? "bg-white border border-line text-slate-900" : automatic ? "bg-emerald-50 border border-emerald-200 text-emerald-950" : "bg-accent text-white"}`}>
+                          {automatic && <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">{m.kind === "REMINDER" ? "Automatic reminder" : "Notice"}</p>}
+                          {words}
+                          <p className={`mt-1 text-[11px] ${inbound ? "text-slate-400" : automatic ? "text-emerald-700" : "text-white/70"}`}>
                             {istLabel(m.createdAt)}
-                            {!inbound && m.status === "FAILED" && <span className="text-red-100"> · not delivered{m.error ? `: ${m.error}` : ""}</span>}
+                            {receipt && <span> · {receipt}</span>}
+                            {!inbound && m.status === "FAILED" && m.error && <span className={automatic ? "text-red-600" : "text-red-100"}>: {m.error}</span>}
                           </p>
                         </div>
                       </div>
