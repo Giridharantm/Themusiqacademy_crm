@@ -202,6 +202,18 @@ export function renderTemplate(body: string, params: string[]): string {
   return body.replace(/\{\{(\d+)\}\}/g, (_, n) => sanitizeParam(params[Number(n) - 1] ?? ""));
 }
 
+// The text a family received for a template message. New messages store it
+// (WhatsAppMessage.body, rendered at send time). Older class reminders are rebuilt
+// from the approved wording and their "Course 4:00 PM · Student" summary, without
+// the class count, which was never kept (exact = false). Anything else older: null.
+export function sentMessageText(m: { template: string; body: string | null; summary: string | null }): { text: string; exact: boolean } | null {
+  if (m.body) return { text: m.body, exact: true };
+  const tpl = TEMPLATE_BODIES[m.template];
+  const parts = /^(.+) (\d{1,2}:\d{2} [AP]M) · (.+)$/.exec(m.summary ?? "");
+  if (!tpl || !parts || !m.template.startsWith("class_reminder")) return null;
+  return { text: renderTemplate(tpl, [parts[3], parts[1], parts[2], "…", "…"]), exact: false };
+}
+
 export type ClassProgress = { used: number; total: number };
 
 // The 10 AM reminder for one student's class. A student with a current

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Card, CardBody, CardHeader, PageHeader, StatCard, EmptyState, Badge } from "@/components/ui";
-import { NOTICE_TYPES, clockLabel, istLabel } from "@/lib/whatsapp-notices";
+import { NOTICE_TYPES, clockLabel, istLabel, sentMessageText } from "@/lib/whatsapp-notices";
 import { isDryRun, whatsappConfigured } from "@/lib/whatsapp-send";
 import { getReminderSchedule, getRemindersPaused, loadWhatsAppDaily } from "@/lib/whatsapp-service";
 import { WhatsAppAlert } from "@/components/whatsapp-alert";
@@ -120,7 +120,9 @@ export default async function WhatsAppPage({
                 return (
                   <tr key={d.dateStr} className={i === 0 ? "bg-panel/60" : ""}>
                     <td className="px-5 py-2 text-slate-900">
-                      {format(new Date(d.dateStr + "T12:00:00"), "EEE d MMM")}
+                      <Link href={`/admin/whatsapp/reminders?date=${d.dateStr}`} className="hover:text-indigo-600 hover:underline" title="See the reminders for this day">
+                        {format(new Date(d.dateStr + "T12:00:00"), "EEE d MMM")}
+                      </Link>
                       {i === 0 ? <span className="ml-2 text-xs text-slate-500">today</span> : null}
                     </td>
                     <td className="px-3 py-2 text-right">{o.total || dash}</td>
@@ -183,6 +185,7 @@ export default async function WhatsAppPage({
                     <p className="text-xs text-slate-500 mt-0.5">
                       {m.kind.toLowerCase()} · {m.phone} · {istLabel(m.createdAt)}
                     </p>
+                    {m.kind !== "INBOUND" && (sentMessageText(m)?.text ?? m.body) && <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{sentMessageText(m)?.text ?? m.body}</p>}
                     {m.error && <p className="text-xs text-red-600 mt-0.5 break-words">{m.error}</p>}
                   </div>
                   <Badge color={statusColors[m.status]}>{m.readAt ? "READ" : m.deliveredAt ? "DELIVERED" : m.status.replace("_", " ")}</Badge>

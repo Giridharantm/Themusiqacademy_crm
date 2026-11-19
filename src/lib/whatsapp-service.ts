@@ -8,6 +8,7 @@ import { parseDateOnly } from "@/lib/attendance";
 import { dayCodeFromDate, OPERATING_DAYS } from "@/lib/schedule";
 import {
   NOTICE_TYPES,
+  TEMPLATE_BODIES,
   TEMPLATE_NOTICE,
   TEMPLATE_RESCHEDULED,
   DEFAULT_REMINDER_TIME,
@@ -22,6 +23,8 @@ import {
   reminderDecision,
   reminderMessage,
   reminderRunDue,
+  renderTemplate,
+  sentMessageText,
   shortDateLabel,
   type ClassProgress,
   type ReminderDecision,
@@ -239,11 +242,13 @@ async function sendLogged(args: {
   }
 
   const result = await sendTemplate(args.phone, args.template, args.params, args.buttonPayloads);
+  // The exact words the family gets, kept so staff can read them later.
+  const body = TEMPLATE_BODIES[args.template] ? renderTemplate(TEMPLATE_BODIES[args.template], args.params) : null;
   await prisma.whatsAppMessage.update({
     where: { id: rowId },
     data: result.ok
-      ? { status: result.dryRun ? "DRY_RUN" : "SENT", waMessageId: result.id, sentAt: new Date(), error: null }
-      : { status: "FAILED", error: result.error },
+      ? { status: result.dryRun ? "DRY_RUN" : "SENT", waMessageId: result.id, sentAt: new Date(), error: null, body }
+      : { status: "FAILED", error: result.error, body },
   });
   return result.ok ? "sent" : "failed";
 }
@@ -336,6 +341,8 @@ export type ReminderPlanRow = {
   // What happened if a reminder for this row has already been tried.
   sentStatus: "PENDING" | "SENT" | "FAILED" | "DRY_RUN" | null;
   error: string | null;
+  // The message itself, once a reminder has been tried: its words and WhatsApp's receipts.
+  sent: { text: string | null; exact: boolean; sentAt: Date | null; deliveredAt: Date | null; readAt: Date | null } | null;
   // What the family answered (confirmed / can't come / rescheduled / no reply yet); null until the reminder has gone out.
   replyStatus: ReplyStatus | null;
 };
@@ -386,18 +393,24 @@ export async function planReminders(dateStr: string): Promise<ReminderPlan> {
         }),
         sentStatus: null,
         error: null,
+        sent: null,
         replyStatus: null,
       });
     }
   }
 
-  const tried = await prisma.whatsAppMessage.findMany({ where: { dedupeKey: { in: rows.map((r) => r.key) } }, select: { dedupeKey: true, status: true, error: true } });
+  const tried = await prisma.whatsAppMessage.findMany({
+    where: { dedupeKey: { in: rows.map((r) => r.key) } },
+    select: { dedupeKey: true, status: true, error: true, template: true, body: true, summary: true, sentAt: true, deliveredAt: true, readAt: true },
+  });
   const byKey = new Map(tried.map((m) => [m.dedupeKey, m]));
   for (const row of rows) {
     const m = byKey.get(row.key);
     if (m && m.status !== "RECEIVED") {
       row.sentStatus = m.status as ReminderPlanRow["sentStatus"];
       row.error = m.error;
+      const text = sentMessageText(m);
+      row.sent = { text: text?.text ?? null, exact: text?.exact ?? false, sentAt: m.sentAt, deliveredAt: m.deliveredAt, readAt: m.readAt };
     }
   }
   const studentIds = Array.from(new Set(rows.map((r) => r.studentId)));

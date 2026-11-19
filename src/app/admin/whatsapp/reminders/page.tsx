@@ -389,6 +389,21 @@ export default async function RemindersPage({
                     {r.phone ?? "No phone number"}
                     {r.progress ? ` · ${r.progress.used} of ${r.progress.total} classes completed` : " · no current subscription"}
                   </p>
+                  {r.sent && (
+                    <details className="mt-1.5 text-xs">
+                      <summary className="cursor-pointer text-indigo-600 hover:underline">See the message</summary>
+                      <div className="mt-1.5 max-w-xl rounded-md bg-emerald-50 border border-emerald-100 px-3 py-2 text-sm text-emerald-900">
+                        {r.sent.text ?? "The wording of this message wasn't kept."}
+                        <p className="mt-1.5 text-xs text-emerald-700">
+                          To {r.phone}
+                          {r.sent.sentAt ? ` · sent ${istLabel(r.sent.sentAt)}` : ""}
+                          {r.sent.deliveredAt ? ` · delivered ${istLabel(r.sent.deliveredAt)}` : ""}
+                          {r.sent.readAt ? ` · read ${istLabel(r.sent.readAt)}` : ""}
+                        </p>
+                        {r.sent.text && !r.sent.exact && <p className="mt-1 text-xs text-slate-500">Sent before the words were stored: this is rebuilt from the approved template, so the &quot;classes completed&quot; numbers are not shown.</p>}
+                      </div>
+                    </details>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   {r.sentStatus ? (
@@ -400,6 +415,7 @@ export default async function RemindersPage({
                   )}
                   {r.replyStatus && <Badge color={replyColor[r.replyStatus]}>{REGULAR_REPLY_LABELS[r.replyStatus]}</Badge>}
                   {r.sentStatus === "FAILED" && r.error && <span className="text-xs text-red-600 max-w-[16rem] break-words">{r.error}</span>}
+                  {r.sent?.deliveredAt && <Badge color="green">{r.sent.readAt ? "Read" : "Delivered"}</Badge>}
                   {!isPast && !r.sentStatus && !r.remindersOff && r.decision !== "CLASS_NOTICE" && (
                     <form action={toggleReminderSkip.bind(null, r.studentId, dateStr)}>
                       <Button type="submit" variant="ghost">
