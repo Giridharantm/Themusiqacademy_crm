@@ -39,7 +39,8 @@ export async function getLeadReportRows(filters: LeadReportFilters) {
       interestedCourse: true,
       assignedTo: true,
       student: true,
-      followUps: { orderBy: { followUpDate: "desc" }, take: 1 },
+      // Only real follow-ups (with a date); plain comments have none.
+      followUps: { where: { followUpDate: { not: null } }, orderBy: { followUpDate: "desc" }, take: 1 },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -56,7 +57,7 @@ export const leadReportColumns: CsvColumn<LeadReportRow>[] = [
   { key: "interestedCourse", label: "Interested instrument", value: (l) => l.interestedCourse?.name ?? "" },
   { key: "assignedTo", label: "Assigned to", value: (l) => l.assignedTo?.name ?? "" },
   { key: "createdAt", label: "Created", value: (l) => l.createdAt.toISOString().slice(0, 10) },
-  { key: "lastFollowUpDate", label: "Last follow-up date", value: (l) => (l.followUps[0] ? l.followUps[0].followUpDate.toISOString().slice(0, 10) : "") },
+  { key: "lastFollowUpDate", label: "Last follow-up date", value: (l) => (l.followUps[0]?.followUpDate ? l.followUps[0].followUpDate.toISOString().slice(0, 10) : "") },
   { key: "lastFollowUpNote", label: "Last follow-up note", value: (l) => l.followUps[0]?.note ?? "" },
   { key: "convertedStudentId", label: "Converted student ID", value: (l) => l.student?.id ?? "" },
   { key: "notes", label: "Notes", value: (l) => l.notes ?? "" },

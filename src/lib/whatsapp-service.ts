@@ -363,8 +363,11 @@ export async function planReminders(dateStr: string): Promise<ReminderPlan> {
 
   const batches = await batchesOnDate(date);
   const recipients = await recipientsForBatches(batches.map((b) => b.id), date);
-  const skips = await prisma.reminderSkip.findMany({ where: { date, studentId: { in: recipients.map((r) => r.studentId) } }, select: { studentId: true } });
-  const skipped = new Set(skips.map((k) => k.studentId));
+  // A skip is for the regular class or for a make-up class that day, and each is skipped on its own.
+  const skips = await prisma.reminderSkip.findMany({ where: { date, studentId: { in: recipients.map((r) => r.studentId) } }, select: { studentId: true, makeUp: true } });
+  const skippedRegular = new Set(skips.filter((k) => !k.makeUp).map((k) => k.studentId));
+  const skippedMakeUp = new Set(skips.filter((k) => k.makeUp).map((k) => k.studentId));
+  const isSkipped = (r: { studentId: string; makeUp: boolean }) => (r.makeUp ? skippedMakeUp : skippedRegular).has(r.studentId);
 
   const rows: ReminderPlanRow[] = [];
   for (const r of recipients) {
@@ -380,14 +383,14 @@ export async function planReminders(dateStr: string): Promise<ReminderPlan> {
         teacherName: r.teacherName,
         progress: r.progress,
         remindersOff: r.remindersOff,
-        skipped: skipped.has(r.studentId) && !r.makeUp,
+        skipped: isSkipped(r),
         makeUp: r.makeUp,
         phone,
         decision: reminderDecision({
           classHasNotice: noticeBatches.has(r.batchId),
           studentOff: r.remindersOff,
-          // The skip is for the class they're missing; a make-up that same day is a different class.
-          skippedToday: skipped.has(r.studentId) && !r.makeUp,
+          // A regular-class skip and a make-up skip are separate: skipping one never silences the other.
+          skippedToday: isSkipped(r),
           phone,
           consented,
         }),

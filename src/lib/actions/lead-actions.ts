@@ -86,21 +86,24 @@ export async function addFollowUp(leadId: string, formData: FormData) {
   const user = await requireRole("ADMIN", "FRONT_DESK");
 
   const note = String(formData.get("note") ?? "").trim();
-  const followUpDateRaw = String(formData.get("followUpDate") ?? "");
-  if (!note) throw new Error("Note is required");
+  const followUpDateRaw = String(formData.get("followUpDate") ?? "").trim();
+  if (!note) throw new Error("Write the comment first");
+  // The date is optional: with one it is a follow-up (shows under "Upcoming follow-ups" on the dashboard),
+  // without one it is a plain comment kept for reference.
+  let followUpDate: Date | null = null;
+  if (followUpDateRaw) {
+    followUpDate = new Date(followUpDateRaw);
+    if (Number.isNaN(followUpDate.getTime())) throw new Error("That follow-up date is not valid");
+  }
 
-  await prisma.followUp.create({
-    data: {
-      leadId,
-      note,
-      followUpDate: followUpDateRaw ? new Date(followUpDateRaw) : new Date(),
-      createdById: user.id,
-    },
-  });
+  await prisma.followUp.create({ data: { leadId, note, followUpDate, createdById: user.id } });
 
-  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
-  if (lead && lead.status === "NEW") {
-    await prisma.lead.update({ where: { id: leadId }, data: { status: "CONTACTED" } });
+  // Scheduling a follow-up means the lead has been contacted; a comment for reference doesn't change the status.
+  if (followUpDate) {
+    const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+    if (lead && lead.status === "NEW") {
+      await prisma.lead.update({ where: { id: leadId }, data: { status: "CONTACTED" } });
+    }
   }
 
   revalidatePath(`/admin/leads/${leadId}`);

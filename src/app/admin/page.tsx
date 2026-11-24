@@ -186,7 +186,7 @@ export default async function AdminDashboard() {
                       </Link>
                       <p className="text-xs text-slate-500">{f.note}</p>
                     </div>
-                    <span className="text-xs text-slate-400">{format(f.followUpDate, "d MMM")}</span>
+                    <span className="text-xs text-slate-400">{f.followUpDate ? format(f.followUpDate, "d MMM") : ""}</span>
                   </li>
                 ))}
               </ul>

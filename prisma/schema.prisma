@@ -138,7 +138,7 @@ model FollowUp {
   leadId       String
   lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   note         String
-  followUpDate DateTime
+  followUpDate DateTime? // blank = a plain comment, not a follow-up
   done         Boolean  @default(false)
   createdById  String?
   createdBy    User?    @relation("FollowUpCreatedBy", fields: [createdById], references: [id])
@@ -533,15 +533,18 @@ model WhatsAppMessage {
 }
 
 // "Don't send this student's reminder on this date" — one-off, set from the
-// Reminders page.
+// Reminders page. `makeUp` says which class it is for: false = the student's
+// regular class that day (also set when a skip or move is booked), true = a
+// make-up class they are coming to that day. The two are skipped independently.
 model ReminderSkip {
   id        String   @id @default(cuid())
   studentId String
   student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   date      DateTime // the class date (date-only)
+  makeUp    Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  @@unique([studentId, date])
+  @@unique([studentId, date, makeUp])
 }
 
 enum ClassChangeKind {

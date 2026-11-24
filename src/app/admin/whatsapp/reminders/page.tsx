@@ -422,7 +422,7 @@ export default async function RemindersPage({
                   {r.sentStatus === "FAILED" && r.error && <span className="text-xs text-red-600 max-w-[16rem] break-words">{r.error}</span>}
                   {r.sent?.deliveredAt && <Badge color="green">{r.sent.readAt ? "Read" : "Delivered"}</Badge>}
                   {!isPast && !r.sentStatus && !r.remindersOff && r.decision !== "CLASS_NOTICE" && (
-                    <form action={toggleReminderSkip.bind(null, r.studentId, dateStr)}>
+                    <form action={toggleReminderSkip.bind(null, r.studentId, dateStr, r.makeUp)}>
                       <Button type="submit" variant="ghost">
                         {r.skipped ? "Undo skip" : "Skip this day"}
                       </Button>

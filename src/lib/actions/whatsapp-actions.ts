@@ -155,13 +155,13 @@ export async function setAutoSkipNoAction(on: boolean) {
 }
 
 // Skip (or un-skip) one student's reminder for one class date only.
-export async function toggleReminderSkip(studentId: string, dateStr: string) {
+export async function toggleReminderSkip(studentId: string, dateStr: string, makeUp = false) {
   await requireRole("ADMIN");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) throw new Error("That date is not valid");
   const date = parseDateOnly(dateStr);
-  const existing = await prisma.reminderSkip.findUnique({ where: { studentId_date: { studentId, date } } });
+  const existing = await prisma.reminderSkip.findUnique({ where: { studentId_date_makeUp: { studentId, date, makeUp } } });
   if (existing) await prisma.reminderSkip.delete({ where: { id: existing.id } });
-  else await prisma.reminderSkip.create({ data: { studentId, date } });
+  else await prisma.reminderSkip.create({ data: { studentId, date, makeUp } });
   revalidatePath("/admin/whatsapp/reminders");
 }
 

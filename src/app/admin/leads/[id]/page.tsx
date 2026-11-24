@@ -27,7 +27,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       where: { id },
       include: {
         interestedCourse: true,
-        followUps: { orderBy: { followUpDate: "desc" } },
+        followUps: { orderBy: { createdAt: "desc" }, include: { createdBy: { select: { name: true } } } },
         student: true,
       },
     }),
@@ -110,26 +110,31 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           </Card>
 
           <Card>
-            <CardHeader title="Follow-ups" subtitle="Log every call, visit or message" />
+            <CardHeader title="Comments & follow-ups" subtitle="Keep notes on every call, visit or message — add a date only if we need to follow up" />
             <CardBody>
               <form action={addFollowUp.bind(null, lead.id)} className="space-y-3 mb-5 pb-5 border-b border-slate-100">
-                <Textarea label="Follow-up note" name="note" placeholder="What was discussed?" required />
+                <Textarea label="Comment" name="note" placeholder="What was discussed?" required />
                 <div className="flex items-end gap-3">
                   <div className="flex-1">
-                    <Input label="Next follow-up date" name="followUpDate" type="date" />
+                    <Input label="Next follow-up date (optional)" name="followUpDate" type="date" />
                   </div>
-                  <Button type="submit">Add follow-up</Button>
+                  <Button type="submit">Add comment</Button>
                 </div>
+                <p className="text-xs text-slate-500">Leave the date blank for a note that is just for reference. With a date it also shows under Upcoming follow-ups on the dashboard.</p>
               </form>
 
               {lead.followUps.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-4">No follow-ups logged yet</p>
+                <p className="text-sm text-slate-400 text-center py-4">No comments yet</p>
               ) : (
                 <ul className="space-y-4">
                   {lead.followUps.map((f) => (
                     <li key={f.id} className="text-sm">
-                      <p className="text-slate-900">{f.note}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">Next follow-up: {format(f.followUpDate, "d MMM yyyy")}</p>
+                      <p className="text-slate-900 whitespace-pre-wrap">{f.note}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {format(f.createdAt, "d MMM yyyy, h:mm a")}
+                        {f.createdBy ? ` · ${f.createdBy.name}` : ""}
+                        {f.followUpDate ? ` · Next follow-up: ${format(f.followUpDate, "d MMM yyyy")}` : ""}
+                      </p>
                     </li>
                   ))}
                 </ul>

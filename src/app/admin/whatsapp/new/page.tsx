@@ -24,6 +24,7 @@ import {
 import { Card, CardBody, CardHeader, PageHeader, Input, Select, Textarea, Button, Badge, EmptyState } from "@/components/ui";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { CompRecipientPicker } from "@/components/comp-recipient-picker";
+import { NoticeClassPicker } from "@/components/notice-class-picker";
 
 type Params = {
   type?: string;
@@ -168,38 +169,15 @@ export default async function NewNoticePage({ searchParams }: { searchParams: Pr
                 <>
               <Input label="Class date" name="date" type="date" defaultValue={dateStr} required />
 
-              <Select label="Which classes" name="scope" defaultValue={scope}>
-                <option value="all">All classes that day</option>
-                <option value="teacher">All classes of one teacher</option>
-                <option value="batches">Specific classes (tick below)</option>
-              </Select>
-              {teachers.length > 0 && (
-                <Select label="Teacher (when 'one teacher' is chosen)" name="teacherId" defaultValue={teacherId}>
-                  {teachers.map(([id, name]) => (
-                    <option key={id} value={id}>
-                      {name}
-                    </option>
-                  ))}
-                </Select>
-              )}
-              <fieldset>
-                <legend className="block text-sm font-medium text-ink mb-1">Classes that day (when &lsquo;specific classes&rsquo; is chosen)</legend>
-                {dayBatches.length === 0 ? (
-                  <p className="text-xs text-slate-500">No classes are scheduled on {shortDateLabel(date)}.</p>
-                ) : (
-                  <div className="max-h-56 overflow-y-auto rounded-md border border-line divide-y divide-slate-100">
-                    {dayBatches.map((b) => (
-                      <label key={b.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-                        <input type="checkbox" name="batchId" value={b.id} defaultChecked={pickedBatchIds.includes(b.id)} />
-                        <span>
-                          {clockLabel(b.startTime)} · {b.course.name}
-                          <span className="text-slate-500"> · {b.teacher?.name ?? "No teacher"}</span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </fieldset>
+              <NoticeClassPicker
+                key={`${dateStr}-${scope}-${teacherId}`}
+                batches={dayBatches.map((b) => ({ id: b.id, label: `${clockLabel(b.startTime)} · ${b.course.name}`, teacherId: b.teacherId, teacherName: b.teacher?.name ?? null }))}
+                teachers={teachers}
+                initialScope={scope}
+                initialTeacherId={teacherId}
+                initialPicked={pickedBatchIds}
+                dateLabel={shortDateLabel(date)}
+              />
                 </>
               )}
 

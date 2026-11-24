@@ -141,7 +141,8 @@ export async function bookClassChange(input: BookInput, now = new Date()): Promi
         createdById: input.createdById ?? null,
       },
     });
-    await tx.reminderSkip.upsert({ where: { studentId_date: { studentId: input.studentId, date: fromDate } }, update: {}, create: { studentId: input.studentId, date: fromDate } });
+    // The skip is for the class they are missing (the regular one), never for a make-up they might have the same day.
+    await tx.reminderSkip.upsert({ where: { studentId_date_makeUp: { studentId: input.studentId, date: fromDate, makeUp: false } }, update: {}, create: { studentId: input.studentId, date: fromDate, makeUp: false } });
     return { ok: true as const, changeId: change.id };
   });
 }
@@ -151,7 +152,9 @@ export async function cancelClassChange(changeId: string): Promise<void> {
   if (!change || change.status !== "BOOKED") return;
   await prisma.$transaction([
     prisma.classChange.update({ where: { id: changeId }, data: { status: "CANCELLED" } }),
-    prisma.reminderSkip.deleteMany({ where: { studentId: change.studentId, date: change.fromDate } }),
+    prisma.reminderSkip.deleteMany({ where: { studentId: change.studentId, date: change.fromDate, makeUp: false } }),
+    // A make-up that is cancelled takes any "skip this make-up's reminder" with it, so a later booking starts clean.
+    ...(change.toDate ? [prisma.reminderSkip.deleteMany({ where: { studentId: change.studentId, date: change.toDate, makeUp: true } })] : []),
   ]);
 }
 
