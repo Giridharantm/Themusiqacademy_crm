@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Card, CardBody, PageHeader } from "@/components/ui";
+import { currentUser } from "@/lib/authz";
+import { canAccessAdminPath } from "@/lib/permissions";
 
 const reports = [
   { href: "/admin/reports/students", title: "Students", description: "Every student's details, enrollments and status — filter by instrument, status, gender and join date." },
@@ -9,12 +11,15 @@ const reports = [
   { href: "/admin/reports/invoices", title: "Invoices & tax", description: "Invoices with the GST breakdown (amount without GST, CGST, SGST) needed to file monthly tax — defaults to the current month." },
 ];
 
-export default function ReportsPage() {
+export default async function ReportsPage() {
+  // Front desk sees only the reports it may open (Attendance and Leads).
+  const role = (await currentUser())?.role;
+  const shown = reports.filter((r) => canAccessAdminPath(role, r.href));
   return (
     <div>
       <PageHeader title="Reports" subtitle="Filter and download data as CSV" />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {reports.map((r) => (
+        {shown.map((r) => (
           <Link key={r.href} href={r.href} className="block h-full">
             <Card className="h-full hover:border-indigo-300 hover:shadow-md transition-shadow">
               <CardBody>

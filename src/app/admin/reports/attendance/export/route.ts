@@ -4,7 +4,7 @@ import { getAttendanceReportRows, attendanceReportColumns } from "@/lib/reports/
 import { toCsv, csvResponse } from "@/lib/csv";
 
 export async function GET(request: NextRequest) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
   const { searchParams } = new URL(request.url);
   const rows = await getAttendanceReportRows({
     courseId: searchParams.get("courseId") ?? undefined,

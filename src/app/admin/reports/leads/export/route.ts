@@ -4,7 +4,7 @@ import { getLeadReportRows, leadReportColumns } from "@/lib/reports/leads";
 import { toCsv, csvResponse } from "@/lib/csv";
 
 export async function GET(request: NextRequest) {
-  await requireRole("ADMIN");
+  await requireRole("ADMIN", "FRONT_DESK");
   const { searchParams } = new URL(request.url);
   const rows = await getLeadReportRows({
     status: searchParams.get("status") ?? undefined,

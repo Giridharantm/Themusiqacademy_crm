@@ -22,6 +22,7 @@ describe("admin menu", () => {
       "Classes[Attendance,Teacher attendance,Day schedule,Class changes,Batches]",
       "Money[Billing,Expenses]",
       "Inbox",
+      "Reports",
     ]);
   });
 

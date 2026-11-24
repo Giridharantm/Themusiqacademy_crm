@@ -26,6 +26,11 @@ describe("canAccessAdminPath", () => {
       "/admin/billing/abc123",
       "/admin/billing/abc123/invoice",
       "/admin/whatsapp/inbox",
+      "/admin/reports",
+      "/admin/reports/attendance",
+      "/admin/reports/attendance/export",
+      "/admin/reports/leads",
+      "/admin/reports/leads/export",
     ]) {
       expect(canAccessAdminPath("FRONT_DESK", p)).toBe(true);
     }
@@ -33,7 +38,8 @@ describe("canAccessAdminPath", () => {
 
   it("keeps front desk out of everything sensitive", () => {
     for (const p of [
-      "/admin/reports",
+      "/admin/reports/students",
+      "/admin/reports/students/export",
       "/admin/reports/invoices",
       "/admin/reports/invoices/export",
       "/admin/reports/pnl",
@@ -56,6 +62,8 @@ describe("canAccessAdminPath", () => {
   it("does not match look-alike paths", () => {
     expect(canAccessAdminPath("FRONT_DESK", "/admin/leadsx")).toBe(false);
     expect(canAccessAdminPath("FRONT_DESK", "/admin/whatsapp/inboxes")).toBe(false);
+    expect(canAccessAdminPath("FRONT_DESK", "/admin/reports/leadsx")).toBe(false);
+    expect(canAccessAdminPath("FRONT_DESK", "/admin/reports/attendance-all")).toBe(false);
   });
 
   it("gives teachers, parents and signed-out visitors nothing", () => {

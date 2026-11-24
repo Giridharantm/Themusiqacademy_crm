@@ -86,7 +86,7 @@ An `INACTIVE` student never shows up in a batch's roster, its student count, or 
 
 ## Front desk logins
 
-A fourth role, `FRONT_DESK`, is for the person at the desk. The admin creates the logins on **Users** (`/admin/users`, admin only): name, email, phone and a password of 8+ characters (there is no default password); a login can be deactivated (it stops signing in at once, history stays) and given a new password. Front desk uses the same `/admin` screens with a shorter menu — Dashboard, Leads, Students, Attendance, Teacher attendance, Batches, Billing, Inbox.
+A fourth role, `FRONT_DESK`, is for the person at the desk. The admin creates the logins on **Users** (`/admin/users`, admin only): name, email, phone and a password of 8+ characters (there is no default password); a login can be deactivated (it stops signing in at once, history stays) and given a new password. Front desk uses the same `/admin` screens with a shorter menu — Dashboard, Leads, Students, Attendance, Teacher attendance, Batches, Billing, Inbox, Reports (only the two reports below).
 
 | Area | Front desk can | Front desk cannot |
 |---|---|---|
@@ -98,8 +98,9 @@ A fourth role, `FRONT_DESK`, is for the person at the desk. The admin creates th
 | Class changes | book a skipped class or a make-up, cancel one | set class size or make-up rules (Courses, admin) |
 | Petty cash | add an expense under a petty-cash heading, and fix or delete their own entry the same day; see only petty cash entries | rent, salaries and the other admin headings, other people's entries, payroll, profit & loss |
 | Billing | record payments (including any discount), raise invoices, record a balance on an invoice, view and print; the outstanding-dues figure | cancel or delete an invoice; the revenue figure |
+| Reports | open the **Attendance** and **Leads** reports and download their CSVs (`/admin/reports/attendance`, `/admin/reports/leads`; the Reports page lists just these two for them) | the Students report and its download, Invoices & tax, Profit & loss |
 | WhatsApp inbox | read, reply, mark a number as spam / unblock | — |
-| Not available at all | — | Reports (and every CSV export), revenue and GST, Teachers, Courses, Users, the WhatsApp overview, class-reminder controls and sending notices |
+| Not available at all | — | The other reports and their CSV exports (Students, Invoices & tax, Profit & loss), the students-list download, revenue and GST, Teachers, Courses, Users, the WhatsApp overview, class-reminder controls and sending notices |
 
 It is enforced twice: `canAccessAdminPath()` in `src/lib/permissions.ts` (used by `src/middleware.ts`, so a hidden page's address just returns to the dashboard) and `requireRole("ADMIN", "FRONT_DESK")` on each allowed server action — every other action is `requireRole("ADMIN")`. `src/lib/actions/permissions.test.ts` lists both sets, so widening an admin-only action by accident fails the tests. To open something to front desk, add its path to `FRONT_DESK_AREAS`, change the action's role check, hide admin-only controls with `isAdmin` on the page, and update that test.
 
@@ -191,7 +192,7 @@ Each page also has a **tracking** side — search a student and see one *combine
 
 ## Reports
 
-`/admin/reports` — four filterable reports (Students, Leads, Attendance, Invoices & tax), each following the same pattern: a filter form (GET query params, so a filtered view is a shareable URL), a capped on-page preview (100–150 rows, with a note when the full result is larger), and a **Download CSV** button that hits a matching Route Handler (`.../export/route.ts`) with the exact same query params — the download always matches what's on screen, never a stale or unfiltered set. Query logic and CSV columns live once in `src/lib/reports/*.ts`, shared by both the page and its export route so they can't drift apart. CSV writing itself (`src/lib/csv.ts`) is a minimal RFC 4180 encoder — quotes only where a field actually needs it (commas, quotes, newlines), CRLF line endings for Excel.
+`/admin/reports` — admin sees all of them; **front desk sees and can download only Attendance and Leads** (`FRONT_DESK_REPORTS` in `src/lib/permissions.ts`; the two export routes accept `ADMIN` and `FRONT_DESK`, the other exports stay `ADMIN`). Four filterable reports (Students, Leads, Attendance, Invoices & tax), each following the same pattern: a filter form (GET query params, so a filtered view is a shareable URL), a capped on-page preview (100–150 rows, with a note when the full result is larger), and a **Download CSV** button that hits a matching Route Handler (`.../export/route.ts`) with the exact same query params — the download always matches what's on screen, never a stale or unfiltered set. Query logic and CSV columns live once in `src/lib/reports/*.ts`, shared by both the page and its export route so they can't drift apart. CSV writing itself (`src/lib/csv.ts`) is a minimal RFC 4180 encoder — quotes only where a field actually needs it (commas, quotes, newlines), CRLF line endings for Excel.
 
 - **Students** — status, instrument, gender, join-date range, free-text search. Columns include every core field plus enrolled instruments/batches, active subscriptions, and guardian details.
 - **Leads** — status, source, interested instrument, created-date range, search. Includes the most recent follow-up and the converted student's ID, if any.
