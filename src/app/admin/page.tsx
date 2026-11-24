@@ -48,7 +48,8 @@ export default async function AdminDashboard() {
     // "upcoming") is the most urgent thing to surface here, not something
     // that should quietly fall off the list once its date has passed.
     prisma.studentFollowUp.findMany({
-      where: { done: false },
+      // Only call-backs with a date; a plain comment on a student is never "due".
+      where: { done: false, followUpDate: { not: null } },
       include: { student: true },
       orderBy: { followUpDate: "asc" },
       take: 5,
@@ -241,7 +242,7 @@ export default async function AdminDashboard() {
             ) : (
               <ul className="divide-y divide-slate-100">
                 {studentCallbacksDue.map((f) => {
-                  const overdue = f.followUpDate < todayDateOnly;
+                  const overdue = !!f.followUpDate && f.followUpDate < todayDateOnly;
                   return (
                     <li key={f.id} className="py-3 flex items-center justify-between gap-3">
                       <div className="min-w-0">
@@ -252,7 +253,7 @@ export default async function AdminDashboard() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className={`text-xs ${overdue ? "text-red-600" : "text-slate-400"}`}>
-                          {format(f.followUpDate, "d MMM")}{overdue ? " · overdue" : ""}
+                          {f.followUpDate ? format(f.followUpDate, "d MMM") : ""}{overdue ? " · overdue" : ""}
                         </span>
                         <form action={markStudentFollowUpDone.bind(null, f.id, f.studentId)}>
                           <Button type="submit" variant="ghost">Done</Button>

@@ -153,7 +153,7 @@ model StudentFollowUp {
   studentId    String
   student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   note         String
-  followUpDate DateTime
+  followUpDate DateTime? // blank = a plain comment, not a call-back
   done         Boolean  @default(false)
   createdById  String?
   createdBy    User?    @relation("StudentFollowUpCreatedBy", fields: [createdById], references: [id])

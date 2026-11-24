@@ -76,7 +76,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
       invoices: { orderBy: { issueDate: "desc" }, include: { payments: true } },
       payments: { orderBy: { paidDate: "desc" }, include: { course: true, invoice: { select: { id: true, invoiceNumber: true, status: true } } } },
       feedback: { orderBy: { date: "desc" }, take: 10, include: { teacher: true } },
-      followUps: { orderBy: { followUpDate: "asc" } },
+      followUps: { orderBy: { createdAt: "desc" }, include: { createdBy: { select: { name: true } } } },
     },
   });
 
@@ -91,7 +91,6 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
 
   const todayDateOnly = new Date();
   todayDateOnly.setHours(0, 0, 0, 0);
-  const pendingFollowUps = student.followUps.filter((f) => !f.done);
 
   const batches = await prisma.batch.findMany({ include: { course: true }, orderBy: { name: "asc" } });
   const courses = await prisma.course.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
@@ -560,35 +559,43 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           <Card>
-            <CardHeader title="Follow-ups" subtitle="For a student to call back later instead of renewing now" />
+            <CardHeader title="Comments & follow-ups" subtitle="Keep notes on this student — add a call-back date only if we need to call them back" />
             <CardBody>
               <form action={addStudentFollowUp.bind(null, student.id)} className="space-y-3 mb-5 pb-5 border-b border-slate-100">
-                <Textarea label="Note" name="note" placeholder="e.g. Out of town till November, call to renew Guitar then" required />
+                <Textarea label="Comment" name="note" placeholder="e.g. Out of town till November, call to renew Guitar then" required />
                 <div className="flex items-end gap-3">
                   <div className="flex-1">
-                    <Input label="Call back on" name="followUpDate" type="date" required />
+                    <Input label="Call back on (optional)" name="followUpDate" type="date" />
                   </div>
-                  <Button type="submit">Add</Button>
+                  <Button type="submit">Add comment</Button>
                 </div>
+                <p className="text-xs text-slate-500">Leave the date blank for a note that is just for reference. With a date it shows under Student callbacks due on the dashboard until you mark it Done.</p>
               </form>
 
-              {pendingFollowUps.length === 0 ? (
-                <EmptyState text="No pending follow-ups" />
+              {student.followUps.length === 0 ? (
+                <EmptyState text="No comments yet" />
               ) : (
                 <ul className="space-y-3">
-                  {pendingFollowUps.map((f) => {
-                    const overdue = f.followUpDate < todayDateOnly;
+                  {student.followUps.map((f) => {
+                    const waiting = !!f.followUpDate && !f.done; // a call-back still to make
+                    const overdue = waiting && f.followUpDate! < todayDateOnly;
                     return (
                       <li key={f.id} className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-sm text-slate-900">{f.note}</p>
+                          <p className="text-sm text-slate-900 whitespace-pre-wrap">{f.note}</p>
                           <p className={`text-xs mt-0.5 ${overdue ? "text-red-600" : "text-slate-400"}`}>
-                            Call back {format(f.followUpDate, "d MMM yyyy")}{overdue ? " · overdue" : ""}
+                            {format(f.createdAt, "d MMM yyyy, h:mm a")}
+                            {f.createdBy ? ` · ${f.createdBy.name}` : ""}
+                            {f.followUpDate ? ` · Call back ${format(f.followUpDate, "d MMM yyyy")}` : ""}
+                            {f.followUpDate && f.done ? " · done" : ""}
+                            {overdue ? " · overdue" : ""}
                           </p>
                         </div>
-                        <form action={markStudentFollowUpDone.bind(null, f.id, student.id)}>
-                          <Button type="submit" variant="ghost">Done</Button>
-                        </form>
+                        {waiting && (
+                          <form action={markStudentFollowUpDone.bind(null, f.id, student.id)}>
+                            <Button type="submit" variant="ghost">Done</Button>
+                          </form>
+                        )}
                       </li>
                     );
                   })}

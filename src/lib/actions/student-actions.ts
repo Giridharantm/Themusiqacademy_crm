@@ -258,20 +258,24 @@ export async function updateEnrollmentStatus(enrollmentId: string, studentId: st
   revalidatePath(`/admin/students/${studentId}`);
 }
 
-// A reminder to call this student back on a given date — e.g. their
-// subscription lapsed or is ending, but they're away or asked to be
-// contacted later rather than renewing right now.
+// A comment on a student. With a call-back date it is a reminder to call them
+// back on that day — e.g. their subscription lapsed or is ending, but they're
+// away or asked to be contacted later rather than renewing right now (it shows
+// on the dashboard until marked Done). Without a date it is a plain comment kept
+// for reference.
 export async function addStudentFollowUp(studentId: string, formData: FormData) {
   const user = await requireRole("ADMIN", "FRONT_DESK");
 
   const note = String(formData.get("note") ?? "").trim();
-  const followUpDateRaw = String(formData.get("followUpDate") ?? "");
-  if (!note) throw new Error("Note is required");
-  if (!followUpDateRaw) throw new Error("A call-back date is required");
+  const followUpDateRaw = String(formData.get("followUpDate") ?? "").trim();
+  if (!note) throw new Error("Write the comment first");
+  let followUpDate: Date | null = null;
+  if (followUpDateRaw) {
+    followUpDate = new Date(followUpDateRaw);
+    if (Number.isNaN(followUpDate.getTime())) throw new Error("That call-back date is not valid");
+  }
 
-  await prisma.studentFollowUp.create({
-    data: { studentId, note, followUpDate: new Date(followUpDateRaw), createdById: user.id },
-  });
+  await prisma.studentFollowUp.create({ data: { studentId, note, followUpDate, createdById: user.id } });
 
   revalidatePath(`/admin/students/${studentId}`);
   revalidatePath("/admin");
